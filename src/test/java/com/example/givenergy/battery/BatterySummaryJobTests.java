@@ -46,7 +46,7 @@ class BatterySummaryJobTests {
 		job.summariseYesterday();
 
 		verify(summaries).saveAll(List.of(new BatterySummary("CE1_2026-09-30", "CE1", LocalDate.of(2026, 9, 30),
-				"Europe/London", 5, 15, Instant.parse("2026-09-30T08:00:00Z"), 100,
+				"Europe/London", 5, 40, 70, 15, Instant.parse("2026-09-30T08:00:00Z"), 100,
 				Instant.parse("2026-09-30T13:00:00Z"), 2900, 2500, 6.4, 5.0, MIDNIGHT)));
 	}
 

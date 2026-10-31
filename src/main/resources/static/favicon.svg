@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<style>
+		.shell { fill: none; stroke: #0b0b0b; }
+		.tip { fill: #0b0b0b; }
+		.level { fill: #2a78d6; }
+		@media (prefers-color-scheme: dark) {
+			.shell { stroke: #f0efec; }
+			.tip { fill: #f0efec; }
+			.level { fill: #3987e5; }
+		}
+	</style>
+	<!-- battery on its side: shell, terminal tip, charge level with a bolt cut-out -->
+	<rect class="shell" x="2" y="8" width="24" height="16" rx="3.5" stroke-width="2.5"/>
+	<rect class="tip" x="27.5" y="12.5" width="3" height="7" rx="1.25"/>
+	<path class="level" fill-rule="evenodd" d="M6 12.5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z M15.6 12.4l-4.6 4.4h3.2l-1.4 3.8 4.6-4.4h-3.2z"/>
+</svg>

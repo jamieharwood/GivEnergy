@@ -10,6 +10,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * One inverter's battery activity over one local day. The id is {@code <serial>_<date>}, so re-running the summary
  * for a day replaces it.
  *
+ * @param openStateOfChargePercent  state of charge at the day's first reading
+ * @param closeStateOfChargePercent state of charge at the day's last reading
  * @param chargedKwh    energy into the battery that day (the day's last "charged today" counter)
  * @param dischargedKwh energy out of the battery that day (the day's last "discharged today" counter)
  */
@@ -20,6 +22,8 @@ public record BatterySummary(
 		LocalDate date,
 		String timezone,
 		int readingCount,
+		int openStateOfChargePercent,
+		int closeStateOfChargePercent,
 		int minStateOfChargePercent,
 		Instant minStateOfChargeAt,
 		int maxStateOfChargePercent,

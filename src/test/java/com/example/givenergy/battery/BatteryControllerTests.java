@@ -27,6 +27,9 @@ class BatteryControllerTests {
 	@MockitoBean
 	private BatterySummaryJob summaryJob;
 
+	@MockitoBean
+	private CandleService candleService;
+
 	@Test
 	void rejectedTokenReturnsBadGatewayWithExplanation() throws Exception {
 		given(batteryService.currentStatus())

@@ -77,8 +77,10 @@ public class BatterySummaryJob {
 		// Earliest reading wins ties, so "min at"/"max at" is when the level was first reached.
 		BatteryReading min = dayReadings.stream().min(bySoc.thenComparing(byTime)).orElseThrow();
 		BatteryReading max = dayReadings.stream().max(bySoc.thenComparing(byTime.reversed())).orElseThrow();
+		BatteryReading first = dayReadings.stream().min(byTime).orElseThrow();
 		BatteryReading last = dayReadings.stream().max(byTime).orElseThrow();
 		return new BatterySummary(serial + "_" + date, serial, date, zone.getId(), dayReadings.size(),
+				first.stateOfChargePercent(), last.stateOfChargePercent(),
 				min.stateOfChargePercent(), min.time(), max.stateOfChargePercent(), max.time(),
 				dayReadings.stream().mapToInt(BatteryReading::chargePowerWatts).max().orElse(0),
 				dayReadings.stream().mapToInt(BatteryReading::dischargePowerWatts).max().orElse(0),

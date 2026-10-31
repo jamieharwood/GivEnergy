@@ -2,6 +2,7 @@ package com.example.givenergy.client;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.ZoneId;
 
 import com.example.givenergy.GivEnergyProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +32,7 @@ class GivEnergyClientTests {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
 		client = new GivEnergyClient(builder, new GivEnergyProperties(URI.create("https://api.test/v1"),
-				"secret", "CE1234", Duration.ZERO));
+				"secret", "CE1234", Duration.ZERO, ZoneId.of("Europe/London")));
 	}
 
 	@Test

@@ -27,4 +27,6 @@ Spring Boot 4 app that reads battery **state of charge** and **charge/discharge*
 }
 ```
 
-The app also logs the battery status every 5 minutes (`givenergy.poll-interval`; set it to `0` to turn this off).
+Every 5 minutes (`givenergy.poll-interval`; `0` turns it off) the app also logs the battery status and records it in MongoDB: database `givenergy`, collection `batteryReadings` on `storenator.bluelarma.com:27017`. To use a different server, set `MONGODB_URI`. Each cloud reading is stored once, even if it's polled more than once.
+
+At 00:00 UK time (`givenergy.timezone`) a scheduled job summarises the previous day into the `batterySummaries` collection, one document per inverter per day. It records the minimum and maximum state of charge and when each happened, the peak charge and discharge power, and the kWh charged and discharged that day. To build or rebuild a day's summary yourself, run `curl -X POST localhost:8081/api/battery/summaries/2026-10-31`.

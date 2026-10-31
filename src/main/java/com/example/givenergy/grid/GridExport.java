@@ -2,6 +2,10 @@ package com.example.givenergy.grid;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.example.givenergy.TariffProperties;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -18,22 +22,27 @@ public record GridExport(
 		double solarToGridKwh,
 		double batteryToGridKwh,
 		double exportKwh,
-		Instant updatedAt) {
+		Instant updatedAt) implements GridDay {
 
 	static GridExport of(String serial, LocalDate date, double solarToGridKwh, double batteryToGridKwh,
 			Instant updatedAt) {
-		double solar = round(solarToGridKwh);
-		double battery = round(batteryToGridKwh);
-		return new GridExport(serial + "_" + date, serial, date, solar, battery, round(solar + battery), updatedAt);
+		double solar = GridDay.round(solarToGridKwh);
+		double battery = GridDay.round(batteryToGridKwh);
+		return new GridExport(serial + "_" + date, serial, date, solar, battery, GridDay.round(solar + battery),
+				updatedAt);
 	}
 
-	boolean sameValuesAs(GridExport other) {
-		return solarToGridKwh == other.solarToGridKwh && batteryToGridKwh == other.batteryToGridKwh;
+	@Override
+	public double valuePence(TariffProperties tariff) {
+		return exportKwh * tariff.exportPence();
 	}
 
-	/** The API returns float noise such as 5.0299999999999985; 0.01 kWh is plenty. */
-	private static double round(double kwh) {
-		return Math.round(kwh * 100) / 100.0;
+	@Override
+	public Map<String, Double> parts() {
+		Map<String, Double> parts = new LinkedHashMap<>();
+		parts.put("solarToGrid", solarToGridKwh);
+		parts.put("batteryToGrid", batteryToGridKwh);
+		return parts;
 	}
 
 }

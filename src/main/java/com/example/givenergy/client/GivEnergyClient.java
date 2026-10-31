@@ -1,6 +1,8 @@
 package com.example.givenergy.client;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -22,6 +24,9 @@ import tools.jackson.databind.JsonNode;
  */
 @Component
 public class GivEnergyClient {
+
+	/** energy-flows labels buckets like {@code 2026-10-30 23:30}. */
+	private static final DateTimeFormatter BUCKET_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
 	private final RestClient restClient;
 
@@ -64,15 +69,19 @@ public class GivEnergyClient {
 				.data();
 	}
 
+	/** Most buckets the energy-flows endpoint returns per request (it answers 422 above this). */
+	public static final int MAX_ENERGY_FLOW_BUCKETS = 1000;
+
 	/**
-	 * Daily energy flows for {@code [start, endExclusive)}. The API's first and last buckets can be partial (and around
-	 * BST the first is labelled with the previous day), so callers wanting whole days should pad the range and discard
-	 * the edge buckets.
+	 * Half-hourly energy flows for {@code [start, endExclusive)}, labelled in the account's local time. Half-hourly
+	 * data is used rather than the daily grouping because the daily totals are wrong on some days around BST, and
+	 * because time-of-use tariffs need the time of day. At most {@link #MAX_ENERGY_FLOW_BUCKETS} buckets (about 20
+	 * days) per call.
 	 */
-	public List<EnergyFlowPeriod> dailyEnergyFlows(String inverterSerial, LocalDate start, LocalDate endExclusive,
+	public List<EnergyFlowPeriod> halfHourlyEnergyFlows(String inverterSerial, LocalDate start, LocalDate endExclusive,
 			Collection<Integer> types) {
 		Map<String, Object> request = Map.of("start_time", start.toString(), "end_time", endExclusive.toString(),
-				"grouping", 1, "types", types);
+				"grouping", 0, "types", types);
 		JsonNode body = restClient.post()
 				.uri("/inverter/{serial}/energy-flows", inverterSerial)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -90,8 +99,7 @@ public class GivEnergyClient {
 			for (Map.Entry<String, JsonNode> flow : bucket.get("data").properties()) {
 				kwh.put(Integer.valueOf(flow.getKey()), flow.getValue().asDouble());
 			}
-			LocalDate date = LocalDate.parse(bucket.get("start_time").asString().substring(0, 10));
-			periods.add(new EnergyFlowPeriod(date, kwh));
+			periods.add(new EnergyFlowPeriod(LocalDateTime.parse(bucket.get("start_time").asString(), BUCKET_TIME), kwh));
 		}
 		return periods;
 	}

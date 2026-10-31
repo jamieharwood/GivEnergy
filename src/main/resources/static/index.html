@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Battery Charge</title>
+<title>Home Energy</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -76,6 +76,17 @@
 	.now-detail { color: var(--text-secondary); margin-top: 6px; }
 
 	.filters { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+
+	.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--grid); margin: 0 0 20px; }
+	.tabs [role="tab"] {
+		font: inherit; font-size: 15px; font-weight: 500; color: var(--text-secondary);
+		background: none; border: 0; padding: 10px 14px; margin-bottom: -1px; cursor: pointer;
+		border-bottom: 2px solid transparent;
+	}
+	.tabs [role="tab"]:hover { color: var(--text-primary); }
+	.tabs [role="tab"][aria-selected="true"] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--text-primary); }
+	.tabs [role="tab"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 6px 6px 0 0; }
+	[role="tabpanel"][hidden] { display: none; }
 	.segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--wash); }
 	.segmented button {
 		font: inherit; font-weight: 500; color: var(--text-secondary);
@@ -143,44 +154,45 @@
 	}
 </style>
 <style>
-	/* Grid export section: categorical slots 1 and 2 (validated adjacent pair). */
-	:root { --series-1: #2a78d6; --series-2: #eb6834; }
+	/* Grid section: categorical slots 1-4 in fixed order (validated together; light-mode slots 3 and 4 sit
+	   below 3:1 contrast, so every value is also in the labelled totals and the table view). */
+	:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; }
 	@media (prefers-color-scheme: dark) {
-		:root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; }
+		:root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; }
 	}
-	:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; }
+	:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; }
 
-	h2.section-title.section-gap { margin-top: 40px; }
-	h2.section-title { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
-	.export-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 24px; margin-bottom: 12px; }
-	.export-total { font-size: 32px; font-weight: 600; line-height: 1.1; }
-	.export-total small { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin-left: 4px; }
-	.export-split { display: flex; gap: 16px; flex-wrap: wrap; color: var(--text-secondary); }
-	.export-split span { display: inline-flex; align-items: center; gap: 6px; }
-	.export-split strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-	.export-period { color: var(--text-muted); width: 100%; font-size: 13px; }
+	.grid-cards { display: grid; gap: 16px; }
+	.grid-cards.single { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+	.flow-head { margin-bottom: 12px; }
+	.flow-title { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+	.flow-stats { display: flex; flex-wrap: wrap; gap: 12px 48px; }
+	.flow-stat { display: flex; flex-direction: column; gap: 4px; }
+	.flow-total { font-size: 32px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+	.flow-total small { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin-left: 6px; }
+	.flow-rates { color: var(--text-secondary); font-size: 13px; }
+	.flow-rates strong, .flow-split strong { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.flow-split { display: flex; gap: 16px; flex-wrap: wrap; color: var(--text-secondary); font-size: 13px; }
+	.flow-split span { display: inline-flex; align-items: center; gap: 6px; }
+	.flow-split strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+	.flow-period { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
 	.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
-	.swatch.solar { background: var(--series-1); }
-	.swatch.battery { background: var(--series-2); }
 	.key { display: inline-block; width: 12px; height: 2px; border-radius: 1px; margin-right: 6px; vertical-align: middle; }
-	.key.solar { background: var(--series-1); }
-	.key.battery { background: var(--series-2); }
 
-	#export-chart { display: block; width: 100%; height: 300px; touch-action: pan-y; }
-	#export-chart .grid { stroke: var(--grid); stroke-width: 1; }
-	#export-chart .baseline { stroke: var(--axis); stroke-width: 1; }
-	#export-chart .tick { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-	#export-chart .annotation { fill: var(--text-secondary); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
-	#export-chart .hover-band { fill: var(--wash); }
-	#export-chart .solar { fill: var(--series-1); }
-	#export-chart .battery { fill: var(--series-2); }
-	#export-chart .no-data { fill: var(--text-muted); font-size: 10px; }
-	.export-chart-wrap[hidden] { display: none; }
+	.flow-chart { display: block; width: 100%; height: 280px; touch-action: pan-y; }
+	.flow-chart .grid { stroke: var(--grid); stroke-width: 1; }
+	.flow-chart .baseline { stroke: var(--axis); stroke-width: 1; }
+	.flow-chart .tick { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+	.flow-chart .annotation { fill: var(--text-secondary); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+	.flow-chart .hover-band { fill: var(--wash); }
+	.flow-chart .no-data { fill: var(--text-muted); font-size: 10px; }
+	.chart-wrap[hidden], details[hidden] { display: none; }
 	.tooltip-row .label { display: inline-flex; align-items: center; }
+	.tooltip-money { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--grid); }
 
 	@media (max-width: 560px) {
-		#export-chart { height: 240px; }
-		.export-total { font-size: 28px; }
+		.flow-chart { height: 220px; }
+		.flow-total { font-size: 28px; }
 	}
 </style>
 </head>
@@ -188,8 +200,8 @@
 <main>
 	<header>
 		<div>
-			<h1>Battery state of charge</h1>
-			<p class="subtitle" id="subtitle">GivEnergy battery</p>
+			<h1>Home energy</h1>
+			<p class="subtitle" id="subtitle">GivEnergy inverter</p>
 		</div>
 		<div class="now" id="now" hidden>
 			<div class="now-value" id="now-value"></div>
@@ -197,6 +209,12 @@
 		</div>
 	</header>
 
+	<div class="tabs" role="tablist" aria-label="Dashboard">
+		<button type="button" role="tab" id="tab-grid" aria-controls="panel-grid" data-tab="grid">Grid</button>
+		<button type="button" role="tab" id="tab-battery" aria-controls="panel-battery" data-tab="battery">Battery state of charge</button>
+	</div>
+
+	<div role="tabpanel" id="panel-battery" aria-labelledby="tab-battery" hidden>
 	<div class="filters">
 		<div class="segmented" id="battery-range" role="group" aria-label="Battery chart time range">
 			<button type="button" data-range="day">Day</button>
@@ -232,44 +250,51 @@
 		</details>
 	</section>
 	<p class="note">Each candle runs from the first reading (open) to the last (close) in its period; the wick spans the lowest and highest charge. Day view shows hourly candles; week and year show one candle per day. Readings are taken every 5 minutes.</p>
-	<h2 class="section-title section-gap" id="export-heading">Grid export</h2>
+	</div>
+
+	<div role="tabpanel" id="panel-grid" aria-labelledby="tab-grid" hidden>
 	<div class="filters">
-		<div class="segmented" id="export-range" role="group" aria-label="Grid export time range">
+		<div class="segmented" id="grid-range" role="group" aria-label="Grid chart time range">
 			<button type="button" data-range="yesterday">Yesterday</button>
 			<button type="button" data-range="week">Week</button>
 			<button type="button" data-range="month">Month</button>
 			<button type="button" data-range="year">Year</button>
 		</div>
 	</div>
-
-	<section class="card" aria-labelledby="export-heading">
-		<div class="export-summary" aria-live="polite">
-			<div class="export-total" id="export-total">–</div>
-			<div class="export-split">
-				<span><i class="swatch solar" aria-hidden="true"></i>Solar <strong id="export-solar">–</strong></span>
-				<span><i class="swatch battery" aria-hidden="true"></i>Battery <strong id="export-battery">–</strong></span>
-			</div>
-			<div class="export-period" id="export-period"></div>
-		</div>
-		<div class="chart-wrap export-chart-wrap" id="export-wrap">
-			<svg id="export-chart" tabindex="0" role="img" aria-label="Grid export chart"></svg>
-			<div class="empty" id="export-empty" hidden></div>
-			<div class="tooltip" id="export-tooltip" hidden></div>
-		</div>
-		<p class="error" id="export-error" hidden></p>
-		<details id="export-details">
-			<summary>Show as table</summary>
-			<div class="table-scroll">
-				<table>
-					<thead><tr id="export-table-head"></tr></thead>
-					<tbody id="export-table-body"></tbody>
-				</table>
-			</div>
-		</details>
-	</section>
-	<p class="note">Energy sent to the grid, split into what came straight from solar and what the battery discharged to the grid. Each day is fetched from GivEnergy just after midnight; today isn't included until then.</p>
+	<div class="grid-cards" id="grid-cards"></div>
+	<p class="error" id="grid-error" hidden></p>
+	<p class="note">Energy sent to the grid (split into what came straight from solar and what the battery discharged) and energy bought from the grid (split into what went straight to the house and what charged the battery). Both charts share one scale so they can be compared. Money is at today's tariff for the whole history; import is time-of-use, so it's split by when it was imported. Each day is fetched from GivEnergy just after midnight; today isn't included until then.</p>
+	</div>
 </main>
 
+<script>
+(() => {
+	// Tabs: Grid first and selected by default; the choice is remembered per browser.
+	const tabs = [...document.querySelectorAll('[role="tab"]')];
+	function select(tab, focus) {
+		for (const t of tabs) {
+			const on = t === tab;
+			t.setAttribute("aria-selected", String(on));
+			t.tabIndex = on ? 0 : -1;
+			document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+		}
+		if (focus) tab.focus();
+		try { localStorage.setItem("tab", tab.dataset.tab); } catch (e) { /* storage unavailable */ }
+	}
+	tabs.forEach((t, i) => {
+		t.addEventListener("click", () => select(t, false));
+		t.addEventListener("keydown", e => {
+			const next = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
+			if (next === undefined) return;
+			e.preventDefault();
+			select(tabs[next], true);
+		});
+	});
+	let saved = null;
+	try { saved = localStorage.getItem("tab"); } catch (e) { /* storage unavailable */ }
+	select(tabs.find(t => t.dataset.tab === saved) || tabs[0], false);
+})();
+</script>
 <script>
 (() => {
 	const RANGES = {
@@ -379,6 +404,7 @@
 		if (!chart) return;
 		const width = svg.clientWidth;
 		const height = svg.clientHeight;
+		if (!width) return;
 		svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 		svg.replaceChildren();
 
@@ -406,6 +432,8 @@
 		}
 		// x ticks
 		for (const t of xTicks(x0, x1, pw)) {
+			// Skip labels that would be clipped at either edge.
+			if (x(t.time) < M.left + 12 || x(t.time) > width - M.right - 20) continue;
 			const label = el("text", { x: x(t.time), y: height - 8, "text-anchor": "middle", class: "tick" }, axis);
 			label.textContent = t.label;
 		}
@@ -632,24 +660,42 @@
 	const SVG_NS = "http://www.w3.org/2000/svg";
 	const M = { top: 24, right: 12, bottom: 28, left: 44 };
 	const RANGES = ["yesterday", "week", "month", "year"];
-	const svg = document.getElementById("export-chart");
-	const wrap = document.getElementById("export-wrap");
-	const tooltip = document.getElementById("export-tooltip");
-	const empty = document.getElementById("export-empty");
-	const errorEl = document.getElementById("export-error");
-	const buttons = document.querySelectorAll("#export-range button");
+	// Stacking order is bottom to top; colours follow the page's fixed categorical order.
+	const FLOWS = [
+		{
+			key: "export", endpoint: "api/grid/exports", title: "Exported to the grid", verb: "exported", moneyLabel: "earned",
+			parts: [
+				{ key: "solarToGrid", label: "Solar → grid", short: "Solar", color: "var(--series-1)" },
+				{ key: "batteryToGrid", label: "Battery → grid", short: "Battery", color: "var(--series-2)" },
+			],
+		},
+		{
+			key: "import", endpoint: "api/grid/imports", title: "Imported from the grid", verb: "imported", moneyLabel: "cost",
+			parts: [
+				{ key: "gridToHome", label: "Grid → home", short: "Home", color: "var(--series-3)" },
+				{ key: "gridToBattery", label: "Grid → battery", short: "Battery", color: "var(--series-4)" },
+			],
+		},
+	];
+	const cards = document.getElementById("grid-cards");
+	const errorEl = document.getElementById("grid-error");
+	const buttons = document.querySelectorAll("#grid-range button");
 
 	let range = "month";
-	try { const saved = localStorage.getItem("export-range"); if (RANGES.includes(saved)) range = saved; } catch (e) { /* storage unavailable */ }
-	let view = null;
-	let layout = null;
-	let active = -1;
+	try {
+		const saved = localStorage.getItem("grid-range") || localStorage.getItem("export-range");
+		if (RANGES.includes(saved)) range = saved;
+	} catch (e) { /* storage unavailable */ }
 
+	// ---- helpers --------------------------------------------------------
 	const kwh = v => `${v.toLocaleString(undefined, { maximumFractionDigits: v >= 100 ? 0 : 1, minimumFractionDigits: v >= 100 ? 0 : 1 })} kWh`;
+	const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+	const pence = p => `${p.toLocaleString(undefined, { maximumFractionDigits: 2 })}p`;
+	const hhmm = t => t.slice(0, 5);
 	// LocalDate strings ("2026-10-30") parsed as local dates, not UTC midnight.
-	const day = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
-	const fmtDay = (s, opts) => day(s).toLocaleDateString(undefined, opts);
-	function barLabel(b) {
+	const day = str => { const [y, m, d] = str.split("-").map(Number); return new Date(y, m - 1, d); };
+	const fmtDay = (str, opts) => day(str).toLocaleDateString(undefined, opts);
+	function barLabel(view, b) {
 		if (view.bucket === "month") {
 			// A partial month (the current one) shows its day range.
 			const month = fmtDay(b.start, { month: "long", year: "numeric" });
@@ -664,50 +710,18 @@
 		const opts = { day: "numeric", month: "short", year: "numeric" };
 		return `${fmtDay(v.from, opts)} – ${fmtDay(v.to, opts)}`;
 	}
-
-	function el(name, attrs, parent) {
+	function svgEl(name, attrs, parent) {
 		const node = document.createElementNS(SVG_NS, name);
 		for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
 		if (parent) parent.appendChild(node);
 		return node;
 	}
-
-	async function load() {
-		wrap.classList.add("loading");
-		errorEl.hidden = true;
-		try {
-			const res = await fetch(`api/grid/exports?range=${range}`);
-			if (!res.ok) {
-				let msg = `HTTP ${res.status}`;
-				try { const b = await res.json(); msg = b.detail || b.error || msg; } catch (e) { /* not JSON */ }
-				throw new Error(msg);
-			}
-			view = await res.json();
-			renderSummary();
-			render();
-			renderTable();
-		} catch (e) {
-			errorEl.textContent = `Couldn't load grid export data: ${e.message}`;
-			errorEl.hidden = false;
-		} finally {
-			wrap.classList.remove("loading");
-		}
+	function h(tag, props = {}, ...children) {
+		const node = document.createElement(tag);
+		Object.assign(node, props);
+		node.append(...children);
+		return node;
 	}
-
-	function renderSummary() {
-		const has = view.days > 0;
-		const total = document.getElementById("export-total");
-		total.replaceChildren(document.createTextNode(has ? view.exportKwh.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) : "–"));
-		const unit = document.createElement("small"); unit.textContent = "kWh exported"; total.appendChild(unit);
-		document.getElementById("export-solar").textContent = has ? kwh(view.solarToGridKwh) : "–";
-		document.getElementById("export-battery").textContent = has ? kwh(view.batteryToGridKwh) : "–";
-		const missing = view.bars.reduce((n, b) => n + (b.days === 0 ? 1 : 0), 0);
-		let period = periodText(view);
-		if (!has) period += " · no data stored yet";
-		else if (view.bucket === "day" && missing) period += ` · ${missing} day${missing === 1 ? "" : "s"} without data`;
-		document.getElementById("export-period").textContent = period;
-	}
-
 	/** A round tick step (1, 2 or 5 × 10ⁿ) giving about four gridlines up to v. */
 	function niceStep(v) {
 		if (v <= 0) return 1;
@@ -716,168 +730,285 @@
 		return 10 * p;
 	}
 
-	function render() {
-		const single = !view || view.range === "YESTERDAY";
-		wrap.hidden = single;
-		document.getElementById("export-details").hidden = single;
-		if (single) return;
+	// ---- cards -------------------------------------------------------------
+	for (const flow of FLOWS) {
+		const id = `${flow.key}-title`;
+		flow.total = h("div", { className: "flow-total" }, "–");
+		flow.money = h("div", { className: "flow-total" }, "–");
+		flow.rates = h("div", { className: "flow-rates" });
+		flow.split = flow.parts.map(part => h("strong", {}, "–"));
+		flow.period = h("div", { className: "flow-period" });
+		flow.svg = svgEl("svg", { class: "flow-chart", tabindex: "0", role: "img" });
+		flow.empty = h("div", { className: "empty", hidden: true });
+		flow.tooltip = h("div", { className: "tooltip", hidden: true });
+		flow.wrap = h("div", { className: "chart-wrap" }, flow.svg, flow.empty, flow.tooltip);
+		flow.tableHead = h("tr");
+		flow.tableBody = h("tbody");
+		flow.details = h("details", {}, h("summary", {}, "Show as table"),
+			h("div", { className: "table-scroll" }, h("table", {}, h("thead", {}, flow.tableHead), flow.tableBody)));
+		const swatches = flow.parts.map((part, i) => {
+			const sw = h("i", { className: "swatch" }); sw.style.background = part.color; sw.setAttribute("aria-hidden", "true");
+			return h("span", {}, sw, `${part.short} `, flow.split[i]);
+		});
+		const card = h("section", { className: "card" },
+			h("div", { className: "flow-head" },
+				h("h3", { className: "flow-title", id }, flow.title),
+				h("div", { className: "flow-stats" },
+					h("div", { className: "flow-stat" }, flow.total, h("div", { className: "flow-split" }, ...swatches)),
+					h("div", { className: "flow-stat" }, flow.money, flow.rates)),
+				flow.period),
+			flow.wrap, flow.details);
+		card.setAttribute("aria-labelledby", id);
+		flow.head = card.querySelector(".flow-head");
+		flow.head.setAttribute("aria-live", "polite");
+		flow.view = null;
+		flow.layout = null;
+		flow.active = -1;
+		cards.appendChild(card);
+		wireHover(flow);
+	}
+
+	// ---- data ---------------------------------------------------------------
+	async function fetchView(flow) {
+		const res = await fetch(`${flow.endpoint}?range=${range}`);
+		if (!res.ok) {
+			let msg = `HTTP ${res.status}`;
+			try { const b = await res.json(); msg = b.detail || b.error || msg; } catch (e) { /* not JSON */ }
+			throw new Error(msg);
+		}
+		return res.json();
+	}
+
+	async function load() {
+		FLOWS.forEach(f => f.wrap.classList.add("loading"));
+		errorEl.hidden = true;
+		try {
+			const views = await Promise.all(FLOWS.map(fetchView));
+			FLOWS.forEach((f, i) => { f.view = views[i]; f.active = -1; });
+			renderAll();
+		} catch (e) {
+			errorEl.textContent = `Couldn't load grid data: ${e.message}`;
+			errorEl.hidden = false;
+		} finally {
+			FLOWS.forEach(f => f.wrap.classList.remove("loading"));
+		}
+	}
+
+	function renderAll() {
+		if (!FLOWS.every(f => f.view)) return;
+		const single = range === "yesterday";
+		cards.classList.toggle("single", single);
+		// One scale for both charts, so import and export bars can be compared directly.
+		const peak = Math.max(0, ...FLOWS.flatMap(f => f.view.bars.map(b => b.totalKwh)));
+		const step = niceStep(peak);
+		const maxV = Math.max(step, Math.ceil(peak / step) * step);
+		for (const flow of FLOWS) {
+			renderSummary(flow);
+			flow.wrap.hidden = single;
+			flow.details.hidden = single;
+			if (!single) {
+				renderChart(flow, maxV, step);
+				renderTable(flow);
+			}
+		}
+	}
+
+	function renderSummary(flow) {
+		const v = flow.view, has = v.days > 0;
+		const unit = h("small", {}, `kWh ${flow.verb}`);
+		flow.total.replaceChildren(has ? v.totalKwh.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) : "–", unit);
+		flow.parts.forEach((part, i) => { flow.split[i].textContent = has ? kwh(v.kwh[part.key]) : "–"; });
+		flow.money.replaceChildren(has ? gbp.format(v.amountGbp) : "–", h("small", {}, flow.moneyLabel));
+		flow.rates.replaceChildren(...rateLine(flow, v, v.kwhByRate, v.totalKwh, has));
+		const missing = v.bars.reduce((n, b) => n + (b.days === 0 ? 1 : 0), 0);
+		let period = periodText(v);
+		if (!has) period += " · no data stored yet";
+		else if (v.bucket === "day" && missing) period += ` · ${missing} day${missing === 1 ? "" : "s"} without data`;
+		flow.period.textContent = period;
+	}
+
+	/**
+	 * "241.8 kWh × 16.5p" for export; for import one line per rate with its own cost,
+	 * "Off-peak £45.92 · 695.8 kWh × 6.6p (23:30–05:30)" then "Peak £62.60 · 171.6 kWh × 36.48p".
+	 */
+	function rateLine(flow, v, byRate, total, has) {
+		const t = v.tariff;
+		const item = (label, value, rate) => [label ? `${label} ` : "", h("strong", {}, has ? kwh(value) : "–"), ` × ${pence(rate)}`];
+		if (flow.key === "export") return item("", total, t.exportPence);
+		const rate = (label, key, unitPence, suffix) => h("div", {}, `${label} `, h("strong", {}, has ? gbp.format(v.amountGbpByRate[key]) : "–"),
+			` · ${has ? kwh(byRate[key]) : "–"} × ${pence(unitPence)}${suffix}`);
+		return [
+			rate("Off-peak", "offPeak", t.importOffPeakPence, ` (${hhmm(t.offPeakStart)}–${hhmm(t.offPeakEnd)})`),
+			rate("Peak", "peak", t.importPeakPence, ""),
+		];
+	}
+
+	// ---- chart -------------------------------------------------------------
+	function renderChart(flow, maxV, step) {
+		const { svg, view } = flow;
 		const width = svg.clientWidth, height = svg.clientHeight;
+		if (!width) return;
 		svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 		svg.replaceChildren();
 		const bars = view.bars;
-		const step = niceStep(Math.max(0, ...bars.map(b => b.exportKwh)));
-		const maxV = Math.max(step, Math.ceil(Math.max(0, ...bars.map(b => b.exportKwh)) / step) * step);
 		const pw = width - M.left - M.right, ph = height - M.top - M.bottom;
 		const y = v => M.top + (1 - v / maxV) * ph;
 		const band = pw / bars.length;
 		const barW = Math.max(2, Math.min(36, band * (band > 8 ? 0.7 : 0.8)));
 		const cx = i => M.left + band * (i + 0.5);
 
-		const axis = el("g", { "aria-hidden": "true" }, svg);
+		const axis = svgEl("g", { "aria-hidden": "true" }, svg);
 		for (let k = 0; k * step <= maxV + 1e-9; k++) {
 			const v = step * k;
-			el("line", { x1: M.left, x2: width - M.right, y1: y(v), y2: y(v), class: k === 0 ? "baseline" : "grid" }, axis);
-			const t = el("text", { x: M.left - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" }, axis);
-			t.textContent = Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1);
+			svgEl("line", { x1: M.left, x2: width - M.right, y1: y(v), y2: y(v), class: k === 0 ? "baseline" : "grid" }, axis);
+			svgEl("text", { x: M.left - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" }, axis).textContent =
+				Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1);
 		}
-		const unit = el("text", { x: M.left - 8, y: M.top - 12, "text-anchor": "end", class: "tick" }, axis);
-		unit.textContent = "kWh";
+		svgEl("text", { x: M.left - 8, y: M.top - 12, "text-anchor": "end", class: "tick" }, axis).textContent = "kWh";
 
 		// x labels: every bar for week/year, thinned for month
 		const every = view.bucket === "month" ? (band >= 40 ? 1 : 2) : bars.length <= 7 ? 1 : Math.ceil(36 / band);
 		bars.forEach((b, i) => {
 			if ((bars.length - 1 - i) % every !== 0) return;
-			const t = el("text", { x: cx(i), y: height - 8, "text-anchor": "middle", class: "tick" }, axis);
-			t.textContent = view.bucket === "month" ? fmtDay(b.start, { month: "short" })
-				: bars.length <= 7 ? fmtDay(b.start, { weekday: "short", day: "numeric" }) : fmtDay(b.start, { day: "numeric" });
+			svgEl("text", { x: cx(i), y: height - 8, "text-anchor": "middle", class: "tick" }, axis).textContent =
+				view.bucket === "month" ? fmtDay(b.start, { month: "short" })
+					: bars.length <= 7 ? fmtDay(b.start, { weekday: "short", day: "numeric" }) : fmtDay(b.start, { day: "numeric" });
 		});
 
-		const hover = el("g", { "aria-hidden": "true" }, svg);
-		const marks = el("g", { "aria-hidden": "true" }, svg);
+		const hover = svgEl("g", { "aria-hidden": "true" }, svg);
+		const marks = svgEl("g", { "aria-hidden": "true" }, svg);
 		const gap = barW >= 6 ? 2 : 1;
+		const r = Math.min(4, barW / 2);
 		bars.forEach((b, i) => {
 			const x0 = cx(i) - barW / 2;
 			if (b.days === 0) {
-				const t = el("text", { x: cx(i), y: y(0) - 4, "text-anchor": "middle", class: "no-data" }, marks);
-				t.textContent = band >= 14 ? "–" : "";
+				if (band >= 14) svgEl("text", { x: cx(i), y: y(0) - 4, "text-anchor": "middle", class: "no-data" }, marks).textContent = "–";
 				return;
 			}
-			const r = Math.min(4, barW / 2);
-			const solarTop = y(b.solarToGridKwh), batteryTop = y(b.exportKwh);
-			const hasBattery = b.batteryToGridKwh > 0 && (solarTop - batteryTop) >= 1;
-			// Solar from the baseline up; battery stacked on top with a surface gap. The topmost segment gets the rounded end.
-			if (b.solarToGridKwh > 0) segment(marks, x0, solarTop, barW, y(0) - solarTop, hasBattery ? 0 : r, "solar");
-			if (hasBattery) segment(marks, x0, batteryTop, barW, Math.max(1, solarTop - batteryTop - gap), r, "battery");
+			// Stack the parts from the baseline up with a surface gap between them; the topmost visible segment
+			// gets the rounded data end.
+			const segs = [];
+			let base = 0;
+			for (const part of flow.parts) {
+				const v = b.kwh[part.key];
+				if (v > 0) segs.push({ part, lo: base, hi: base + v });
+				base += v;
+			}
+			segs.forEach((seg, k) => {
+				const top = y(seg.hi);
+				const bottom = y(seg.lo) - (k > 0 ? gap : 0);
+				if (bottom - top < 0.5) return;
+				segment(marks, x0, top, barW, bottom - top, k === segs.length - 1 ? r : 0, seg.part.color);
+			});
 		});
 
 		// Label only the period's peak.
 		let peak = -1;
-		bars.forEach((b, i) => { if (b.days && (peak < 0 || b.exportKwh > bars[peak].exportKwh)) peak = i; });
-		if (peak >= 0 && bars[peak].exportKwh > 0) {
-			const t = el("text", { x: Math.min(Math.max(cx(peak), M.left + 18), width - M.right - 18), y: y(bars[peak].exportKwh) - 6, "text-anchor": "middle", class: "annotation" }, svg);
-			t.textContent = bars[peak].exportKwh.toFixed(1);
+		bars.forEach((b, i) => { if (b.days && (peak < 0 || b.totalKwh > bars[peak].totalKwh)) peak = i; });
+		if (peak >= 0 && bars[peak].totalKwh > 0) {
+			svgEl("text", {
+				x: Math.min(Math.max(cx(peak), M.left + 18), width - M.right - 18), y: y(bars[peak].totalKwh) - 6,
+				"text-anchor": "middle", class: "annotation",
+			}, svg).textContent = bars[peak].totalKwh.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 		}
 
-		layout = { bars, cx, band, hover, height };
-		empty.hidden = view.days > 0;
-		empty.textContent = "No grid export data stored for this period yet.";
-		svg.setAttribute("aria-label", `Grid export by ${view.bucket}, ${periodText(view)}. Total ${kwh(view.exportKwh)}.`);
-		if (active >= bars.length) active = -1;
-		if (active >= 0) showActive();
+		flow.layout = { bars, cx, band, hover, height };
+		flow.empty.hidden = view.days > 0;
+		flow.empty.textContent = "No data stored for this period yet.";
+		svg.setAttribute("aria-label", `${flow.title} by ${view.bucket}, ${periodText(view)}. Total ${kwh(view.totalKwh)}.`);
+		if (flow.active >= bars.length) flow.active = -1;
+		if (flow.active >= 0) showActive(flow);
 	}
 
 	/** A bar segment with only its top corners rounded, so the data end is rounded and the baseline end square. */
-	function segment(parent, x, top, w, h, r, cls) {
-		if (h <= 0) return;
-		r = Math.min(r, h, w / 2);
+	function segment(parent, x, top, w, ht, r, color) {
+		r = Math.min(r, ht, w / 2);
 		const d = r > 0
-			? `M${x},${top + h} V${top + r} Q${x},${top} ${x + r},${top} H${x + w - r} Q${x + w},${top} ${x + w},${top + r} V${top + h} Z`
-			: `M${x},${top + h} V${top} H${x + w} V${top + h} Z`;
-		el("path", { d, class: cls }, parent);
+			? `M${x},${top + ht} V${top + r} Q${x},${top} ${x + r},${top} H${x + w - r} Q${x + w},${top} ${x + w},${top + r} V${top + ht} Z`
+			: `M${x},${top + ht} V${top} H${x + w} V${top + ht} Z`;
+		svgEl("path", { d, style: `fill: ${color}` }, parent);
 	}
 
-	function showActive() {
-		const { bars, cx, band, hover, height } = layout;
-		hover.replaceChildren();
+	// ---- hover / keyboard ----------------------------------------------
+	function showActive(flow) {
+		const { layout, tooltip, view, active } = flow;
+		layout.hover.replaceChildren();
 		if (active < 0) { tooltip.hidden = true; return; }
-		el("rect", { x: cx(active) - band / 2, y: M.top, width: band, height: height - M.top - M.bottom, class: "hover-band", rx: 3 }, hover);
+		const { bars, cx, band, height } = layout;
+		svgEl("rect", { x: cx(active) - band / 2, y: M.top, width: band, height: height - M.top - M.bottom, class: "hover-band", rx: 3 }, layout.hover);
 		const b = bars[active];
-		tooltip.replaceChildren();
-		const add = (cls, text) => { const n = document.createElement("div"); n.className = cls; n.textContent = text; tooltip.appendChild(n); return n; };
-		add("tooltip-title", barLabel(b));
+		tooltip.replaceChildren(h("div", { className: "tooltip-title" }, barLabel(view, b)));
 		if (b.days === 0) {
-			add("tooltip-note", "No data stored");
+			tooltip.append(h("div", { className: "tooltip-note" }, "No data stored"));
 		} else {
-			add("tooltip-move", `${kwh(b.exportKwh)} exported`);
-			const row = (value, label, key) => {
-				const r = add("tooltip-row", "");
-				const s = document.createElement("strong"); s.textContent = value;
-				const l = document.createElement("span"); l.className = "label";
-				const k = document.createElement("i"); k.className = `key ${key}`; k.setAttribute("aria-hidden", "true");
-				l.append(k, document.createTextNode(label));
-				r.append(s, l);
-			};
-			row(kwh(b.solarToGridKwh), "Solar → grid", "solar");
-			row(kwh(b.batteryToGridKwh), "Battery → grid", "battery");
+			tooltip.append(h("div", { className: "tooltip-move" }, `${kwh(b.totalKwh)} ${flow.verb}`));
+			// Top of the stack first, matching the bar.
+			for (const part of [...flow.parts].reverse()) {
+				const key = h("i", { className: "key" }); key.style.background = part.color; key.setAttribute("aria-hidden", "true");
+				tooltip.append(h("div", { className: "tooltip-row" }, h("strong", {}, kwh(b.kwh[part.key])), h("span", { className: "label" }, key, part.label)));
+			}
+			tooltip.append(h("div", { className: "tooltip-row tooltip-money" }, h("strong", {}, gbp.format(b.amountGbp)), h("span", {}, flow.moneyLabel)));
+			if (flow.key === "import") {
+				tooltip.append(h("div", { className: "tooltip-note" }, `Off-peak ${kwh(b.kwhByRate.offPeak)} · peak ${kwh(b.kwhByRate.peak)}`));
+			}
 			if (view.bucket === "month") {
 				const span = Math.round((day(b.end) - day(b.start)) / 86400e3) + 1;
-				add("tooltip-note", b.days < span ? `${b.days} of ${span} days have data` : `${b.days} days`);
+				tooltip.append(h("div", { className: "tooltip-note" }, b.days < span ? `${b.days} of ${span} days have data` : `${b.days} days`));
 			}
 		}
 		tooltip.hidden = false;
-		const tw = tooltip.offsetWidth, ww = wrap.clientWidth;
+		const tw = tooltip.offsetWidth, ww = flow.wrap.clientWidth;
 		let left = cx(active) + band / 2 + 8;
 		if (left + tw > ww) left = cx(active) - band / 2 - 8 - tw;
 		tooltip.style.transform = `translate(${Math.max(0, left)}px, ${M.top}px)`;
 	}
 
-	function indexAt(px) {
-		if (!layout || !layout.bars.length) return -1;
-		const i = Math.floor((px - M.left) / layout.band);
-		return i >= 0 && i < layout.bars.length ? i : -1;
+	function wireHover(flow) {
+		const { svg } = flow;
+		const indexAt = px => {
+			if (!flow.layout || !flow.layout.bars.length) return -1;
+			const i = Math.floor((px - M.left) / flow.layout.band);
+			return i >= 0 && i < flow.layout.bars.length ? i : -1;
+		};
+		const set = i => { if (i !== flow.active) { flow.active = i; showActive(flow); } };
+		svg.addEventListener("pointermove", e => set(indexAt(e.clientX - svg.getBoundingClientRect().left)));
+		svg.addEventListener("pointerleave", () => { if (document.activeElement !== svg) set(-1); });
+		svg.addEventListener("keydown", e => {
+			if (!flow.layout || !flow.layout.bars.length) return;
+			const n = flow.layout.bars.length, a = flow.active;
+			const next = { ArrowRight: a < 0 ? n - 1 : Math.min(n - 1, a + 1), ArrowLeft: a < 0 ? n - 1 : Math.max(0, a - 1), Home: 0, End: n - 1, Escape: -1 }[e.key];
+			if (next === undefined) return;
+			e.preventDefault();
+			flow.active = next;
+			showActive(flow);
+		});
+		svg.addEventListener("focus", () => { if (flow.active < 0 && flow.layout && flow.layout.bars.length) set(flow.layout.bars.length - 1); });
+		svg.addEventListener("blur", () => set(-1));
 	}
-	svg.addEventListener("pointermove", e => {
-		const i = indexAt(e.clientX - svg.getBoundingClientRect().left);
-		if (i !== active) { active = i; showActive(); }
-	});
-	svg.addEventListener("pointerleave", () => { if (document.activeElement !== svg) { active = -1; showActive(); } });
-	svg.addEventListener("keydown", e => {
-		if (!layout || !layout.bars.length) return;
-		const n = layout.bars.length;
-		if (e.key === "ArrowRight") active = active < 0 ? n - 1 : Math.min(n - 1, active + 1);
-		else if (e.key === "ArrowLeft") active = active < 0 ? n - 1 : Math.max(0, active - 1);
-		else if (e.key === "Home") active = 0;
-		else if (e.key === "End") active = n - 1;
-		else if (e.key === "Escape") active = -1;
-		else return;
-		e.preventDefault();
-		showActive();
-	});
-	svg.addEventListener("focus", () => { if (active < 0 && layout && layout.bars.length) { active = layout.bars.length - 1; showActive(); } });
-	svg.addEventListener("blur", () => { active = -1; showActive(); });
 
-	function renderTable() {
-		const head = document.getElementById("export-table-head");
-		const body = document.getElementById("export-table-body");
-		const cols = [view.bucket === "month" ? "Month" : "Day", "Solar → grid", "Battery → grid", "Total"];
-		head.replaceChildren(...cols.map(c => { const th = document.createElement("th"); th.textContent = c; return th; }));
-		body.replaceChildren(...[...view.bars].reverse().map(b => {
-			const tr = document.createElement("tr");
-			const cells = b.days === 0 ? [barLabel(b), "–", "–", "–"] : [barLabel(b), kwh(b.solarToGridKwh), kwh(b.batteryToGridKwh), kwh(b.exportKwh)];
-			for (const text of cells) { const td = document.createElement("td"); td.textContent = text; tr.appendChild(td); }
-			return tr;
+	// ---- table ------------------------------------------------------------
+	function renderTable(flow) {
+		const v = flow.view;
+		const imp = flow.key === "import";
+		const cols = [v.bucket === "month" ? "Month" : "Day", ...flow.parts.map(p => p.label), "Total", ...(imp ? ["Off-peak", "Peak"] : []), flow.moneyLabel === "cost" ? "Cost" : "Earned"];
+		flow.tableHead.replaceChildren(...cols.map(c => h("th", {}, c)));
+		flow.tableBody.replaceChildren(...[...v.bars].reverse().map(b => {
+			const cells = b.days === 0 ? [barLabel(v, b), ...cols.slice(1).map(() => "–")]
+				: [barLabel(v, b), ...flow.parts.map(p => kwh(b.kwh[p.key])), kwh(b.totalKwh),
+					...(imp ? [kwh(b.kwhByRate.offPeak), kwh(b.kwhByRate.peak)] : []), gbp.format(b.amountGbp)];
+			return h("tr", {}, ...cells.map(c => h("td", {}, c)));
 		}));
 	}
 
+	// ---- range control ------------------------------------------------
 	function selectRange(r) {
 		range = r;
 		buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.range === r)));
-		try { localStorage.setItem("export-range", r); } catch (e) { /* storage unavailable */ }
-		active = -1;
+		try { localStorage.setItem("grid-range", r); } catch (e) { /* storage unavailable */ }
 		load();
 	}
 	buttons.forEach(b => b.addEventListener("click", () => selectRange(b.dataset.range)));
-	new ResizeObserver(() => { if (view) render(); }).observe(wrap);
+	new ResizeObserver(() => renderAll()).observe(cards);
 	selectRange(range);
 	// New days arrive once a night; an hourly refresh keeps an open page current.
 	setInterval(load, 3600e3);

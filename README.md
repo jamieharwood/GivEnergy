@@ -1,31 +1,34 @@
 # GivEnergy Battery Reader
 
-A Spring Boot 4 app that reads a GivEnergy inverter and battery from the GivEnergy cloud API. It records the battery's state of charge in MongoDB, keeps a daily history of grid export, and shows both on a web page with candlestick and bar charts.
+A Spring Boot 4 app that reads a GivEnergy inverter and battery from the GivEnergy cloud API. It records the battery's state of charge in MongoDB, keeps a daily history of grid import and export with what it cost and earned, and shows them on a web page with candlestick and bar charts.
 
-![Dashboard in dark mode: battery candlesticks for the last week and grid export by month for the last year](docs/screenshots/dashboard-dark.png)
+![Dashboard in dark mode on the Grid tab: export and import by month for the last year, with costs and earnings](docs/screenshots/dashboard-dark.png)
 
 ## Features
 
 - **Live battery status:** state of charge, charging or discharging, current power, and today's charged and discharged kWh, served as JSON.
 - **Battery history:** a reading every 5 minutes, stored in MongoDB and summarised each midnight into the day's open, close, minimum and maximum charge.
-- **Grid export history:** daily solar → grid and battery → grid kWh, back-filled automatically from the day the inverter was installed and kept up to date each night.
-- **Web dashboard:**
-  - battery candlestick chart with **Day / Week / Year** views
-  - grid export chart with **Yesterday / Week / Month / Year** views
+- **Grid import and export history:** daily kWh, back-filled automatically from the day the inverter was installed and kept up to date each night:
+  - import, split into grid → home and grid → battery, and into off-peak and peak
+  - export, split into solar → grid and battery → grid
+- **Costs and earnings:** import is priced on a two-rate time-of-use tariff and export at a flat rate. The default prices are 36.48p peak, 6.6p off-peak (23:30–05:30) and 16.5p for export, all configurable.
+- **Web dashboard** with two tabs, **Grid** (shown first) and **Battery state of charge**:
+  - Grid: export and import charts on a shared scale, with **Yesterday / Week / Month / Year** views and the cost or earnings for each period and bar
+  - Battery: a candlestick chart of state of charge, with **Day / Week / Year** views
   - hover and keyboard tooltips, a table view of each chart, light and dark mode, and a phone layout
 - **No duplicate data:** every stored record has an ID made of the inverter serial and the date or time, so re-fetching overwrites rather than adds.
 
 ## Screenshots
 
-| Battery state of charge (Day view) | Grid export (Month view) |
+| Grid tab (Month view) | Battery state of charge tab (Day view) |
 |---|---|
-| ![Hourly candlesticks of battery charge over the last 24 hours, with a tooltip](docs/screenshots/battery-day.png) | ![Daily grid export bars for the last 30 days, with a tooltip](docs/screenshots/grid-export-month.png) |
+| ![Daily grid export and import bars for the last 30 days, with a tooltip](docs/screenshots/grid-month.png) | ![Hourly candlesticks of battery charge over the last 24 hours, with a tooltip](docs/screenshots/battery-day.png) |
 
 <img src="docs/screenshots/mobile.png" alt="Dashboard on a phone in dark mode" width="260" align="right">
 
 The page also works on a phone (right).
 
-These screenshots come from a real installation, with the inverter serial replaced by a placeholder. The battery charts use sample data, because that installation had only just started recording readings; the grid export charts show its real history.
+These screenshots come from a real installation, with the inverter serial replaced by a placeholder. The battery charts use sample data, because that installation had only just started recording readings; the grid charts show its real history.
 
 <br clear="right">
 
@@ -38,19 +41,22 @@ flowchart LR
     P --> R[(batteryReadings)]
     R -- 00:00 daily --> SJ[BatterySummaryJob]
     SJ --> S[(batterySummaries)]
-    GE -- startup and 00:30 daily --> GS[GridExportSync]
+    GE -- startup and 00:30 daily --> GS[GridHistorySync]
     GS --> X[(gridExports)]
-    R & S & X --> API[REST API]
+    GS --> I[(gridImports)]
+    R & S & X & I --> API[REST API]
     API --> UI[Web dashboard]
 ```
 
 The app talks to the **GivEnergy cloud API** (`https://api.givenergy.cloud/v1`) with a personal API token. It doesn't connect to the inverter over your home network. The cloud updates about every 5 minutes, so that's how often the app polls.
 
+Grid history is fetched as half-hourly buckets and added up into local days. The time of day is needed to split import into off-peak and peak. Half-hourly is also more accurate: GivEnergy's own daily totals are badly wrong on some summer days. All figures come from the inverter, so they can differ slightly from your supplier's bill. If the inverter's clock is off, a little energy can land on the neighbouring day.
+
 | Data | GivEnergy endpoint |
 |---|---|
 | Live state of charge and battery power | `GET /inverter/{serial}/system-data/latest` |
 | Today's charged/discharged kWh | `GET /inverter/{serial}/meter-data/latest` |
-| Daily grid export (solar → grid, battery → grid) | `POST /inverter/{serial}/energy-flows` |
+| Half-hourly grid import and export (grid → home/battery, solar/battery → grid) | `POST /inverter/{serial}/energy-flows` |
 | Inverter serial and installation date | `GET /communication-device` |
 
 ## Requirements
@@ -96,7 +102,7 @@ Alternatively, set the `GIVENERGY_API_TOKEN` and `MONGODB_URI` environment varia
 
 Go to <http://localhost:8081/>.
 
-The first time the app starts, it back-fills the grid export history. That takes about 10 seconds for 4 years of data. Battery charts fill up as readings arrive, and daily battery candles appear after the first midnight summary.
+The first time the app starts, it back-fills the grid import and export history. That takes about 10 seconds for 4 years of data. Battery charts fill up as readings arrive, and daily battery candles appear after the first midnight summary.
 
 ## Configuration
 
@@ -108,8 +114,12 @@ These are set in `application.properties`, `config/application.properties` or on
 | `givenergy.inverter-serial` | `GIVENERGY_INVERTER_SERIAL` | first inverter on the account | Which inverter to read |
 | `givenergy.poll-interval` | | `5m` | How often to read and record the battery; `0` turns it off |
 | `givenergy.timezone` | | `Europe/London` | Defines "a day" for summaries, and the time zone for the midnight jobs |
-| `givenergy.grid-export.sync-on-startup` | | `true` | Back-fill or catch up grid export when the app starts |
-| `givenergy.grid-export.cron` | | `0 30 0 * * *` | When to fetch the previous day's grid export |
+| `givenergy.grid-history.sync-on-startup` | | `true` | Back-fill or catch up grid import and export when the app starts |
+| `givenergy.grid-history.cron` | | `0 30 0 * * *` | When to fetch the previous day's grid import and export |
+| `givenergy.tariff.export-pence` | | `16.5` | Export payment, pence per kWh |
+| `givenergy.tariff.import-peak-pence` | | `36.48` | Import price outside the off-peak window, pence per kWh |
+| `givenergy.tariff.import-off-peak-pence` | | `6.6` | Import price inside the off-peak window, pence per kWh |
+| `givenergy.tariff.off-peak-start` / `off-peak-end` | | `23:30` / `05:30` | Off-peak window in local time; it can wrap past midnight |
 | `spring.mongodb.uri` | `MONGODB_URI` | `mongodb://storenator.bluelarma.com:27017/givenergy` | MongoDB connection, including the database name |
 | `server.port` | | `8081` | Web server port |
 
@@ -120,8 +130,9 @@ These are set in `application.properties`, `config/application.properties` or on
 | `GET /api/battery` | Live battery status from GivEnergy |
 | `GET /api/battery/candles?range=day\|week\|year` | State-of-charge candles: hourly for `day`, daily for `week` and `year` |
 | `POST /api/battery/summaries/{yyyy-MM-dd}` | Build or rebuild a day's battery summary |
-| `GET /api/grid/exports?range=yesterday\|week\|month\|year` | Grid export totals and bars: daily, or monthly for `year` |
-| `POST /api/grid/exports/sync` | Fetch grid export now; returns the number of days written |
+| `GET /api/grid/imports?range=yesterday\|week\|month\|year` | Grid import totals and bars: daily, or monthly for `year` |
+| `GET /api/grid/exports?range=yesterday\|week\|month\|year` | Grid export totals and bars, with the same ranges |
+| `POST /api/grid/sync[?from=yyyy-MM-dd]` | Fetch grid import and export now; with `from`, re-fetch every day since that date. Returns the number of documents written |
 | `GET /actuator/health` | Health check, including MongoDB |
 
 Example: `GET /api/battery`
@@ -140,7 +151,7 @@ Example: `GET /api/battery`
 }
 ```
 
-`state` is `CHARGING`, `DISCHARGING` or `IDLE`. If GivEnergy rejects the token, the endpoints return `502` with an explanation instead of a generic error.
+`state` is `CHARGING`, `DISCHARGING` or `IDLE`. The grid endpoints include `amountGbp` (cost for import, earnings for export) for the whole range and for each bar. Import also includes `kwhByRate` and `amountGbpByRate` (`offPeak`, `peak`); `amountGbp` is the sum of the two rounded rate costs. If GivEnergy rejects the token, the endpoints return `502` with an explanation instead of a generic error.
 
 ## Data stored in MongoDB
 
@@ -150,7 +161,10 @@ All collections are in the database named in `spring.mongodb.uri`. Dates are sto
 |---|---|---|---|
 | `batteryReadings` | cloud reading (about every 5 minutes) | `<serial>_<reading time>` | `BatteryPoller` |
 | `batterySummaries` | inverter per day: open/close/min/max charge, peak power, kWh in and out | `<serial>_<date>` | `BatterySummaryJob` at 00:00 |
-| `gridExports` | inverter per day: solar → grid, battery → grid and total kWh | `<serial>_<date>` | `GridExportSync` at startup and 00:30 |
+| `gridExports` | inverter per day: solar → grid, battery → grid and total kWh | `<serial>_<date>` | `GridHistorySync` at startup and 00:30 |
+| `gridImports` | inverter per day: grid → home, grid → battery, total and off-peak kWh | `<serial>_<date>` | `GridHistorySync` at startup and 00:30 |
+
+Costs and earnings aren't stored. They're calculated whenever the page asks for them, using the current tariff settings, so changing a price re-values the whole history. Changing the off-peak *window* does change what's stored; after changing it, run `POST /api/grid/sync?from=<first date>`.
 
 ## Scheduled jobs
 
@@ -158,13 +172,13 @@ All collections are in the database named in `spring.mongodb.uri`. Dates are sto
 |---|---|---|
 | `BatteryPoller` | every `givenergy.poll-interval` | Reads the live status, logs it and saves a `batteryReadings` document |
 | `BatterySummaryJob` | 00:00 in `givenergy.timezone` | Summarises the previous day's readings into `batterySummaries` |
-| `GridExportSync` | 15 s after startup, and at 00:30 | Fetches every day since the last stored one (or since installation, on the first run). It re-checks the last 2 stored days and only writes days that are new or have changed |
+| `GridHistorySync` | 15 s after startup, and at 00:30 | Fetches import and export together for every day since the last stored one (or since installation, if either collection is empty). It re-checks the last 2 stored days and only writes days that are new or have changed. On first start after upgrading, it re-fetches everything stored without the off-peak split |
 
 ## Development
 
 ```bash
 ./gradlew build                                   # compile, run all tests, build the jar in build/libs
-./gradlew test --tests GridExportSyncTests        # one test class
+./gradlew test --tests GridHistorySyncTests       # one test class
 ./gradlew test --tests 'CandleServiceTests.weekViewIsPastSummariesPlusToday'   # one test
 java -jar build/libs/givenergy-0.0.1-SNAPSHOT.jar # run the built jar
 ```
@@ -175,7 +189,7 @@ java -jar build/libs/givenergy-0.0.1-SNAPSHOT.jar # run the built jar
 src/main/java/com/example/givenergy/
 ├── client/     GivEnergy API client and response types
 ├── battery/    live status, readings, daily summaries, candlestick data
-├── grid/       grid export sync and view data
+├── grid/       grid import/export sync and view data
 └── *.java      application, configuration properties, Mongo config, error handling
 src/main/resources/
 ├── application.properties

@@ -3,6 +3,7 @@ package com.example.givenergy.client;
 import java.net.URI;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -96,24 +97,24 @@ class GivEnergyClientTests {
 	}
 
 	@Test
-	void readsDailyEnergyFlows() {
+	void readsHalfHourlyEnergyFlows() {
 		server.expect(requestTo("https://api.test/v1/inverter/CE1234/energy-flows"))
 				.andExpect(method(HttpMethod.POST))
 				.andExpect(content().json("""
-						{"start_time":"2026-10-27","end_time":"2026-10-29","grouping":1,"types":[2,6]}
+						{"start_time":"2026-10-30","end_time":"2026-10-31","grouping":0,"types":[3,4]}
 						"""))
 				.andRespond(withSuccess("""
-						{"data":{"0":{"start_time":"2026-10-27 00:00","end_time":"2026-10-27 23:59","data":{"2":5.6,"6":0}},
-						 "1":{"start_time":"2026-10-28 00:00","end_time":"2026-10-28 23:59","data":{"2":15.5,"6":0.25}}}}
+						{"data":{"0":{"start_time":"2026-10-30 00:00","end_time":"2026-10-30 00:30","data":{"3":0.2,"4":1.3}},
+						 "1":{"start_time":"2026-10-30 23:30","end_time":"2026-10-31 00:00","data":{"3":1.0000000000000009,"4":0.9}}}}
 						""", MediaType.APPLICATION_JSON));
 
-		List<EnergyFlowPeriod> periods = client.dailyEnergyFlows("CE1234", LocalDate.of(2026, 10, 27),
-				LocalDate.of(2026, 10, 29), List.of(2, 6));
+		List<EnergyFlowPeriod> periods = client.halfHourlyEnergyFlows("CE1234", LocalDate.of(2026, 10, 30),
+				LocalDate.of(2026, 10, 31), List.of(3, 4));
 
-		assertThat(periods).extracting(EnergyFlowPeriod::date)
-				.containsExactly(LocalDate.of(2026, 10, 27), LocalDate.of(2026, 10, 28));
-		assertThat(periods.get(1).kwh(EnergyFlowType.SOLAR_TO_GRID)).isEqualTo(15.5);
-		assertThat(periods.get(1).kwh(EnergyFlowType.BATTERY_TO_GRID)).isEqualTo(0.25);
+		assertThat(periods).extracting(EnergyFlowPeriod::start)
+				.containsExactly(LocalDateTime.of(2026, 10, 30, 0, 0), LocalDateTime.of(2026, 10, 30, 23, 30));
+		assertThat(periods.get(0).kwh(EnergyFlowType.GRID_TO_BATTERY)).isEqualTo(1.3);
+		assertThat(periods.get(1).date()).isEqualTo(LocalDate.of(2026, 10, 30));
 	}
 
 	@Test
@@ -124,8 +125,8 @@ class GivEnergyClientTests {
 				.andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
 
 		LocalDate day = LocalDate.of(2027, 1, 1);
-		assertThat(client.dailyEnergyFlows("CE1234", day, day.plusDays(1), List.of(2))).isEmpty();
-		assertThat(client.dailyEnergyFlows("CE1234", day, day.plusDays(1), List.of(2))).isEmpty();
+		assertThat(client.halfHourlyEnergyFlows("CE1234", day, day.plusDays(1), List.of(2))).isEmpty();
+		assertThat(client.halfHourlyEnergyFlows("CE1234", day, day.plusDays(1), List.of(2))).isEmpty();
 	}
 
 }

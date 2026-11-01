@@ -11,10 +11,14 @@ export JAVA_HOME=~/.jdks/ms-21.0.12
 ./gradlew build                                        # compile + all tests + boot jar (build/libs)
 ./gradlew test --tests BatteryServiceTests             # single test class
 ./gradlew test --tests 'GivEnergyClientTests.readsLatestSystemData'   # single method
-GIVENERGY_API_TOKEN=... ./gradlew bootRun              # run; then GET http://localhost:8080/api/battery
+GIVENERGY_API_TOKEN=... ./gradlew bootRun              # run; then GET http://localhost:8081/api/battery
 ```
 
-Docker: `docker compose up -d --build` builds the multi-stage `Dockerfile` (layered boot jar via `-Djarmode=tools extract --layers --launcher`, non-root JRE image) and runs it on port 8081. The token comes from `GIVENERGY_API_TOKEN` in the git- and docker-ignored `.env`; `config/` isn't copied into the image.
+Tests need no token. `@SpringBootTest` classes must set `givenergy.poll-interval=0` and `givenergy.grid-history.sync-on-startup=false` (see `GivEnergyApplicationTests`), or the background jobs start calling the API and writing to Mongo.
+
+The default `spring.mongodb.uri` is the real database, and there is no separate dev profile, so a local `bootRun` writes to live data unless `MONGODB_URI` is set. Stop the Docker container first when running locally: two copies don't create duplicates, but they double the API calls.
+
+Docker: `docker compose up -d --build` builds the multi-stage `Dockerfile` (layered boot jar via `-Djarmode=tools extract --layers --launcher`, non-root JRE image) and runs it on port 8081 (`GIVENERGY_PORT` overrides the host port). The token comes from `GIVENERGY_API_TOKEN` in the git- and docker-ignored `.env`; `config/` isn't copied into the image. In the container, `localhost` in `MONGODB_URI` means the container itself.
 
 ## Architecture
 
@@ -29,9 +33,10 @@ Reads battery data from the **GivEnergy cloud REST API** (`https://api.givenergy
   - It back-fills from the commissioning date when either collection is empty, or when the latest import has no off-peak split (`null`, from before the split existed). Otherwise, at startup and at 00:30 local, it re-fetches the last 2 stored days plus anything newer.
   - It writes only new or changed days. `POST /api/grid/sync[?from=date]` runs it on demand.
   - `GET /api/grid/imports|exports?range=yesterday|week|month|year` returns a generic `GridView` (parts keyed by `GridFlow.parts()`, `kwhByRate`, `amountGbp`, import-only `amountGbpByRate` rounded per rate per bar so the parts add up to `amountGbp`, `tariff`; year = 12 monthly bars).
-  - Money is computed at read time from `givenergy.tariff.*`, at current prices for all history. The UI draws import and export on a shared y-scale.
+  - Money is computed at read time from `givenergy.tariff.*`, at current prices for all history, so changing a price needs no migration. The off-peak *window* is different: the split is stored, so changing it needs `POST /api/grid/sync?from=<first date>`. The UI draws import and export on a shared y-scale.
 - energy-flows quirks (verified against data-points meter counters and integrated grid power): `end_time` is exclusive. The **daily** grouping (1) is badly wrong on some BST days (e.g. 15 Jul 2026: 13.9 vs 21.1 kWh), so don't use it. Half-hourly buckets are labelled in local time and match the meter, apart from small shifts between adjacent days when the inverter clock drifts. Requests are still padded by a day either side, keeping only the inner days.
 - `MongoConfig` uses the driver's java.time codecs so `LocalDate` is stored as UTC midnight. Spring Data's default uses the JVM zone, and this machine's JVM picks up Europe/London from /etc/timezone, so summer dates came out as 23:00 the day before.
+- Time comes from the injected `Clock` bean (UTC), converted with `givenergy.timezone` for local days, not from `now()` or the JVM zone.
 - Range queries on `time` need an explicit `@Query` (`$gte`/`$lt`): derived `...GreaterThanEqualAndTimeLessThan` fails at runtime because both criteria target the same field. Mocked repository tests won't catch this.
 - `ApiExceptionHandler` maps `GivEnergyAuthenticationException` (thrown by the client on 401/403) to a 502 `ProblemDetail`.
 

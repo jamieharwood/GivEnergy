@@ -949,7 +949,9 @@
 			}
 			tooltip.append(h("div", { className: "tooltip-row tooltip-money" }, h("strong", {}, gbp.format(b.amountGbp)), h("span", {}, flow.moneyLabel)));
 			if (flow.key === "import") {
-				tooltip.append(h("div", { className: "tooltip-note" }, `Off-peak ${kwh(b.kwhByRate.offPeak)} · peak ${kwh(b.kwhByRate.peak)}`));
+				tooltip.append(h("div", { className: "tooltip-note" },
+					h("div", {}, `Off-peak ${gbp.format(b.amountGbpByRate.offPeak)} · ${kwh(b.kwhByRate.offPeak)}`),
+					h("div", {}, `Peak ${gbp.format(b.amountGbpByRate.peak)} · ${kwh(b.kwhByRate.peak)}`)));
 			}
 			if (view.bucket === "month") {
 				const span = Math.round((day(b.end) - day(b.start)) / 86400e3) + 1;

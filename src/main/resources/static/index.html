@@ -992,12 +992,13 @@
 	function renderTable(flow) {
 		const v = flow.view;
 		const imp = flow.key === "import";
-		const cols = [v.bucket === "month" ? "Month" : "Day", ...flow.parts.map(p => p.label), "Total", ...(imp ? ["Off-peak", "Peak"] : []), flow.moneyLabel === "cost" ? "Cost" : "Earned"];
+		const cols = [v.bucket === "month" ? "Month" : "Day", ...flow.parts.map(p => p.label), "Total", ...(imp ? ["Off-peak", "Peak", "Off-peak cost", "Peak cost"] : []), flow.moneyLabel === "cost" ? "Cost" : "Earned"];
 		flow.tableHead.replaceChildren(...cols.map(c => h("th", {}, c)));
 		flow.tableBody.replaceChildren(...[...v.bars].reverse().map(b => {
 			const cells = b.days === 0 ? [barLabel(v, b), ...cols.slice(1).map(() => "–")]
 				: [barLabel(v, b), ...flow.parts.map(p => kwh(b.kwh[p.key])), kwh(b.totalKwh),
-					...(imp ? [kwh(b.kwhByRate.offPeak), kwh(b.kwhByRate.peak)] : []), gbp.format(b.amountGbp)];
+					...(imp ? [kwh(b.kwhByRate.offPeak), kwh(b.kwhByRate.peak),
+						gbp.format(b.amountGbpByRate.offPeak), gbp.format(b.amountGbpByRate.peak)] : []), gbp.format(b.amountGbp)];
 			return h("tr", {}, ...cells.map(c => h("td", {}, c)));
 		}));
 	}

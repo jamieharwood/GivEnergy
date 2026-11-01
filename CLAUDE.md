@@ -14,6 +14,8 @@ export JAVA_HOME=~/.jdks/ms-21.0.12
 GIVENERGY_API_TOKEN=... ./gradlew bootRun              # run; then GET http://localhost:8080/api/battery
 ```
 
+Docker: `docker compose up -d --build` builds the multi-stage `Dockerfile` (layered boot jar via `-Djarmode=tools extract --layers --launcher`, non-root JRE image) and runs it on port 8081. The token comes from `GIVENERGY_API_TOKEN` in the git- and docker-ignored `.env`; `config/` isn't copied into the image.
+
 ## Architecture
 
 Reads battery data from the **GivEnergy cloud REST API** (`https://api.givenergy.cloud/v1`, bearer-token auth), not from the inverter over the LAN.

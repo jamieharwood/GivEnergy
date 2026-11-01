@@ -1,0 +1,14 @@
+# docker compose up -d --build
+# The API token comes from GIVENERGY_API_TOKEN in the environment or in a git-ignored .env file next to this one.
+services:
+  givenergy:
+    build: .
+    image: givenergy:latest
+    container_name: givenergy
+    restart: unless-stopped
+    ports:
+      - "${GIVENERGY_PORT:-8081}:8081"
+    environment:
+      GIVENERGY_API_TOKEN: ${GIVENERGY_API_TOKEN:?set GIVENERGY_API_TOKEN in .env or the environment}
+      GIVENERGY_INVERTER_SERIAL: ${GIVENERGY_INVERTER_SERIAL:-}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://storenator.bluelarma.com:27017/givenergy}

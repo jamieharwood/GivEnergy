@@ -32,3 +32,6 @@ build/
 
 ### Local secrets (Spring Boot loads ./config/application.properties automatically) ###
 /config/
+
+### Docker Compose secrets ###
+/.env

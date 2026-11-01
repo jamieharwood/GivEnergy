@@ -104,6 +104,32 @@ Go to <http://localhost:8081/>.
 
 The first time the app starts, it back-fills the grid import and export history. That takes about 10 seconds for 4 years of data. Battery charts fill up as readings arrive, and daily battery candles appear after the first midnight summary.
 
+### Running in Docker
+
+The project includes a `Dockerfile` (a multi-stage build: compile with the Gradle wrapper, then run on a Java 21 runtime image as a non-root user) and a `compose.yaml`.
+
+Put the token in a `.env` file next to `compose.yaml`. It's git-ignored and kept out of the image:
+
+```properties
+GIVENERGY_API_TOKEN=<your token>
+# Optional
+#GIVENERGY_INVERTER_SERIAL=CE1234G567
+#MONGODB_URI=mongodb://localhost:27017/givenergy
+#GIVENERGY_PORT=8081
+```
+
+Then build and start it:
+
+```bash
+docker compose up -d --build     # build the image and start the container
+docker compose logs -f           # follow the logs
+docker compose down              # stop it
+```
+
+The dashboard is on <http://localhost:8081/>, or the port set by `GIVENERGY_PORT`. The container restarts automatically unless you stop it. `config/application.properties` isn't used inside the container, so set everything through `.env` or `environment:` in `compose.yaml`. Any property can be set there as an environment variable, for example `GIVENERGY_POLL_INTERVAL=10m`. The MongoDB host must be reachable from the container: `localhost` there means the container itself, so use the host's name or address.
+
+Run only one copy of the app at a time (for example, stop it in IntelliJ first). Two copies don't create duplicate records, but they double the calls to the GivEnergy API.
+
 ## Configuration
 
 These are set in `application.properties`, `config/application.properties` or on the command line (`--name=value`):

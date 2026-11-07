@@ -8,8 +8,8 @@ import org.springframework.data.mongodb.repository.Query;
 
 public interface BatterySummaryRepository extends MongoRepository<BatterySummary, String> {
 
-	/** Summaries whose date falls in {@code [from, to]}, oldest first. */
-	@Query(value = "{ 'date': { $gte: ?0, $lte: ?1 } }", sort = "{ 'date': 1 }")
-	List<BatterySummary> findByDateInRange(LocalDate from, LocalDate to);
+	/** Summaries for one inverter whose date falls in {@code [from, to]}, oldest first. */
+	@Query(value = "{ 'inverterSerial': ?0, 'date': { $gte: ?1, $lte: ?2 } }", sort = "{ 'date': 1 }")
+	List<BatterySummary> findByInverterSerialAndDateInRange(String inverterSerial, LocalDate from, LocalDate to);
 
 }

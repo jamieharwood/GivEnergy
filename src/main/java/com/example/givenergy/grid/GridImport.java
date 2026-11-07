@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import com.example.givenergy.AppliedTariff;
 import com.example.givenergy.TariffProperties;
 
 import org.springframework.data.annotation.Id;
@@ -15,7 +16,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * Energy imported from the grid by one inverter on one local day, split into what went straight to the house and
  * what charged the battery. {@code offPeakImportKwh} is the part of the total imported during the tariff's off-peak
  * window (the rest is peak); it is null in documents stored before the split existed, which the sync re-fetches.
- * The id is {@code <serial>_<date>}, so each day is stored once.
+ * {@code appliedTariff} is the prices in force when the day was first stored. The id is {@code <serial>_<date>}.
  */
 @Document("gridImports")
 public record GridImport(
@@ -26,7 +27,8 @@ public record GridImport(
 		double gridToBatteryKwh,
 		double importKwh,
 		Double offPeakImportKwh,
-		Instant updatedAt) implements GridDay {
+		Instant updatedAt,
+		AppliedTariff appliedTariff) implements GridDay {
 
 	static GridImport of(String serial, LocalDate date, double gridToHomeKwh, double gridToBatteryKwh,
 			double offPeakImportKwh, Instant updatedAt) {
@@ -34,7 +36,13 @@ public record GridImport(
 		double battery = GridDay.round(gridToBatteryKwh);
 		double total = GridDay.round(home + battery);
 		return new GridImport(serial + "_" + date, serial, date, home, battery, total,
-				Math.min(total, GridDay.round(offPeakImportKwh)), updatedAt);
+				Math.min(total, GridDay.round(offPeakImportKwh)), updatedAt, null);
+	}
+
+	@Override
+	public GridImport withAppliedTariff(AppliedTariff tariff) {
+		return new GridImport(id, inverterSerial, date, gridToHomeKwh, gridToBatteryKwh, importKwh, offPeakImportKwh,
+				updatedAt, tariff);
 	}
 
 	boolean hasRateSplit() {
@@ -57,9 +65,11 @@ public record GridImport(
 
 	@Override
 	public Map<String, Double> valuePenceByRate(TariffProperties tariff) {
+		double offPeak = appliedTariff != null ? appliedTariff.importOffPeakPence() : tariff.importOffPeakPence();
+		double peak = appliedTariff != null ? appliedTariff.importPeakPence() : tariff.importPeakPence();
 		Map<String, Double> rates = new LinkedHashMap<>();
-		rates.put("offPeak", offPeakKwh() * tariff.importOffPeakPence());
-		rates.put("peak", peakImportKwh() * tariff.importPeakPence());
+		rates.put("offPeak", offPeakKwh() * offPeak);
+		rates.put("peak", peakImportKwh() * peak);
 		return rates;
 	}
 

@@ -1,30 +1,32 @@
 package com.example.givenergy.battery;
 
-import com.example.givenergy.GivEnergyProperties;
-import com.example.givenergy.client.CommunicationDevice;
+import com.example.givenergy.InverterDirectory;
 import com.example.givenergy.client.GivEnergyClient;
 import com.example.givenergy.client.MeterData;
 import com.example.givenergy.client.SystemData;
 
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 @Service
 public class BatteryService {
 
 	private final GivEnergyClient client;
 
-	private final GivEnergyProperties properties;
+	private final InverterDirectory inverters;
 
-	private volatile String discoveredSerial;
-
-	public BatteryService(GivEnergyClient client, GivEnergyProperties properties) {
+	public BatteryService(GivEnergyClient client, InverterDirectory inverters) {
 		this.client = client;
-		this.properties = properties;
+		this.inverters = inverters;
 	}
 
+	/** Live status of the default inverter (the configured serial, or the first on the account). */
 	public BatteryStatus currentStatus() {
-		String serial = inverterSerial();
+		return currentStatus(null);
+	}
+
+	/** Live status of {@code requested}, or of the default inverter when it is blank. */
+	public BatteryStatus currentStatus(String requested) {
+		String serial = inverters.resolve(requested);
 		SystemData system = client.latestSystemData(serial);
 		MeterData meter = client.latestMeterData(serial);
 		return toStatus(serial, system, meter);
@@ -35,26 +37,36 @@ public class BatteryService {
 		int power = battery.power();
 		BatteryState state = power > 0 ? BatteryState.DISCHARGING
 				: power < 0 ? BatteryState.CHARGING : BatteryState.IDLE;
+		int grid = watts(system.grid() == null ? null : system.grid().power());
+		BatteryStatus.PowerNow flows = new BatteryStatus.PowerNow(
+				watts(system.solar() == null ? null : system.solar().power()),
+				Math.max(grid, 0), Math.max(-grid, 0), watts(system.consumption()));
 		MeterData.Battery today = meter.today().battery();
 		return new BatteryStatus(serial, system.time(), battery.percent(), state,
 				Math.max(-power, 0), Math.max(power, 0), battery.temperature(),
-				today.charge(), today.discharge());
+				today.charge(), today.discharge(), system.status(), flows,
+				energy(meter.today()), energy(meter.total()));
 	}
 
-	private String inverterSerial() {
-		if (StringUtils.hasText(properties.inverterSerial())) {
-			return properties.inverterSerial();
+	private static BatteryStatus.EnergyTotals energy(MeterData.Totals totals) {
+		if (totals == null) {
+			return new BatteryStatus.EnergyTotals(0, 0, 0, 0, 0, 0);
 		}
-		if (discoveredSerial == null) {
-			discoveredSerial = client.communicationDevices().stream()
-					.map(CommunicationDevice::inverter)
-					.filter(inv -> inv != null && StringUtils.hasText(inv.serial()))
-					.map(CommunicationDevice.Inverter::serial)
-					.findFirst()
-					.orElseThrow(() -> new IllegalStateException(
-							"No inverter found on the GivEnergy account; set givenergy.inverter-serial"));
-		}
-		return discoveredSerial;
+		MeterData.Battery battery = totals.battery();
+		return new BatteryStatus.EnergyTotals(orZero(totals.solar()),
+				totals.grid() == null ? 0 : orZero(totals.grid().imported()),
+				totals.grid() == null ? 0 : orZero(totals.grid().exported()),
+				orZero(totals.consumption()),
+				battery == null ? 0 : battery.charge(),
+				battery == null ? 0 : battery.discharge());
+	}
+
+	private static int watts(Integer value) {
+		return value == null ? 0 : value;
+	}
+
+	private static double orZero(Double value) {
+		return value == null ? 0 : value;
 	}
 
 }

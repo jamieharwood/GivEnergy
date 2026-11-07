@@ -73,7 +73,7 @@ class BatterySummaryJobTests {
 			double chargedKwh, double dischargedKwh) {
 		Instant t = Instant.parse(time);
 		return new BatteryReading(serial + "_" + t, serial, t, t, soc, BatteryState.IDLE, chargeW, dischargeW, null,
-				chargedKwh, dischargedKwh);
+				chargedKwh, dischargedKwh, null, null, null, null, null);
 	}
 
 }

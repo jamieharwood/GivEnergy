@@ -3,6 +3,7 @@ package com.example.givenergy.grid;
 import java.time.LocalDate;
 import java.util.Map;
 
+import com.example.givenergy.AppliedTariff;
 import com.example.givenergy.TariffProperties;
 
 /** One inverter's grid energy for one local day, split into named parts (kWh). */
@@ -15,7 +16,13 @@ interface GridDay {
 	/** Part name to kWh, in display order; the names match {@link GridFlow#parts()}. */
 	Map<String, Double> parts();
 
-	/** What the day's energy is worth at the tariff: earned for export, cost for import. */
+	/** Prices stored with the day, or null for a document written before prices were stored. */
+	AppliedTariff appliedTariff();
+
+	/** A copy that carries {@code tariff}; energy values stay as they are. */
+	GridDay withAppliedTariff(AppliedTariff tariff);
+
+	/** What the day's energy is worth: earned for export, cost for import. Uses the stored prices when present. */
 	double valuePence(TariffProperties tariff);
 
 	/** kWh by tariff rate ({@code offPeak}, {@code peak}); empty when one rate applies to the whole day. */

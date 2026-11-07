@@ -72,10 +72,29 @@
 	h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
 	.subtitle { color: var(--text-secondary); margin: 0; }
 	.now { text-align: right; }
-	.now-value { font-size: 40px; font-weight: 600; line-height: 1; }
-	.now-detail { color: var(--text-secondary); margin-top: 6px; }
+	.live { display: flex; flex-wrap: wrap; gap: 14px 22px; justify-content: flex-end; }
+	.metric { min-width: 4.5rem; }
+	.metric-value { font-size: 18px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+	.metric.soc .metric-value { font-size: 32px; }
+	.metric-label { color: var(--text-secondary); font-size: 12px; }
+	.inverter { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-secondary); font-size: 13px; }
+	.inverter select, .choice input, .choice select {
+		font: inherit; color: var(--text-primary); background: var(--surface);
+		border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px;
+	}
+	.alerts {
+		margin: 0 0 16px; padding: 10px 14px; border-radius: 10px;
+		background: color-mix(in srgb, var(--fall) 14%, var(--surface));
+		border: 1px solid color-mix(in srgb, var(--fall) 45%, transparent);
+	}
+	.alerts p { margin: 0; }
+	.alerts p + p { margin-top: 4px; }
+	.alerts[hidden] { display: none; }
 
-	.filters { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+	.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+	.choice { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; }
+	.csv { color: var(--text-secondary); font-size: 13px; }
+	.filters .csv:first-of-type { margin-left: auto; }
 
 	.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--grid); margin: 0 0 20px; }
 	.tabs [role="tab"] {
@@ -148,7 +167,8 @@
 	@media (max-width: 560px) {
 		main { padding-top: 20px; }
 		.now { text-align: left; }
-		.now-value { font-size: 32px; }
+		.live { justify-content: flex-start; }
+		.metric.soc .metric-value { font-size: 28px; }
 		#chart { height: 280px; }
 		.card { padding: 16px 12px 8px; }
 	}
@@ -186,6 +206,23 @@
 	.flow-chart .annotation { fill: var(--text-secondary); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
 	.flow-chart .hover-band { fill: var(--wash); }
 	.flow-chart .no-data { fill: var(--text-muted); font-size: 10px; }
+	#bill { margin-bottom: 16px; }
+	#half-hour-card, #power-card { margin-top: 16px; }
+	.flow-chart .offpeak { fill: color-mix(in srgb, var(--series-4) 22%, transparent); }
+	.flow-chart .export-line { fill: none; stroke: var(--series-1); stroke-width: 1.5; }
+	.bill-row { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: flex-end; }
+	.bill-net { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+	.bill-net small, .bill-part { color: var(--text-secondary); font-size: 13px; }
+	.bill-part strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+	#power-chart { display: block; width: 100%; height: 220px; }
+	#power-chart .grid { stroke: var(--grid); stroke-width: 1; }
+	#power-chart .baseline { stroke: var(--axis); stroke-width: 1; }
+	#power-chart .tick { fill: var(--text-muted); font-size: 11px; }
+	.trace { fill: none; stroke-width: 1.5; }
+	.trace.solar { stroke: var(--series-1); }
+	.trace.house { stroke: var(--series-3); }
+	.trace.battery { stroke: var(--series-2); }
+	.trace.temp { stroke: var(--text-muted); stroke-dasharray: 3 3; }
 	.chart-wrap[hidden], details[hidden] { display: none; }
 	.tooltip-row .label { display: inline-flex; align-items: center; }
 	.tooltip-money { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--grid); }
@@ -202,15 +239,15 @@
 		<div>
 			<h1>Home energy</h1>
 			<p class="subtitle" id="subtitle">GivEnergy inverter</p>
+			<label class="inverter" id="inverter-label" hidden>Inverter <select id="inverter"></select></label>
 		</div>
-		<div class="now" id="now" hidden>
-			<div class="now-value" id="now-value"></div>
-			<div class="now-detail" id="now-detail"></div>
-		</div>
+		<div class="now" id="now" hidden></div>
 	</header>
+	<div class="alerts" id="alerts" role="status" hidden></div>
 
 	<div class="tabs" role="tablist" aria-label="Dashboard">
 		<button type="button" role="tab" id="tab-grid" aria-controls="panel-grid" data-tab="grid">Grid</button>
+		<button type="button" role="tab" id="tab-solar" aria-controls="panel-solar" data-tab="solar">Solar</button>
 		<button type="button" role="tab" id="tab-battery" aria-controls="panel-battery" data-tab="battery">Battery state of charge</button>
 	</div>
 
@@ -219,8 +256,12 @@
 		<div class="segmented" id="battery-range" role="group" aria-label="Battery chart time range">
 			<button type="button" data-range="day">Day</button>
 			<button type="button" data-range="week">Week</button>
+			<button type="button" data-range="month">Month</button>
 			<button type="button" data-range="year">Year</button>
 		</div>
+		<label class="choice">Ending <input type="date" id="battery-anchor" aria-label="Battery period ending"></label>
+		<label class="choice"><input type="checkbox" id="battery-compare"> Compare a year earlier</label>
+		<a class="csv" id="battery-csv" href="api/battery/candles.csv?range=week">Download CSV</a>
 	</div>
 
 	<section class="card" aria-labelledby="chart-title">
@@ -249,7 +290,42 @@
 			</div>
 		</details>
 	</section>
-	<p class="note">Each candle runs from the first reading (open) to the last (close) in its period; the wick spans the lowest and highest charge. Day view shows hourly candles; week and year show one candle per day. Readings are taken every 5 minutes.</p>
+	<p class="note" id="battery-compare-note" hidden></p>
+	<p class="note">Each candle runs from the first reading (open) to the last (close) in its period; the wick spans the lowest and highest charge. Day view shows hourly candles; week, month and year show one candle per day. With an ending date, month is that calendar month. Readings are taken every 5 minutes.</p>
+	<section class="card" id="power-card" aria-labelledby="power-title">
+		<div class="card-head">
+			<h2 class="card-title" id="power-title">Power and temperature</h2>
+			<ul class="legend" aria-label="Legend">
+				<li><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--series-1)" stroke-width="2"/></svg>Solar</li>
+				<li><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--series-3)" stroke-width="2"/></svg>House</li>
+				<li><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--series-2)" stroke-width="2"/></svg>Battery (discharge up)</li>
+				<li><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="3 3"/></svg>Temperature</li>
+			</ul>
+		</div>
+		<div class="chart-wrap" id="power-wrap">
+			<svg id="power-chart" role="img" aria-labelledby="power-title"></svg>
+			<div class="empty" id="power-empty" hidden></div>
+		</div>
+		<p class="note" id="power-note">Day view is each reading; week view is an hourly average. The right axis is temperature.</p>
+	</section>
+	</div>
+
+	<div role="tabpanel" id="panel-solar" aria-labelledby="tab-solar" hidden>
+	<div class="filters">
+		<div class="segmented" id="solar-range" role="group" aria-label="Solar chart time range">
+			<button type="button" data-range="yesterday">Yesterday</button>
+			<button type="button" data-range="week">Week</button>
+			<button type="button" data-range="month">Month</button>
+			<button type="button" data-range="year">Year</button>
+		</div>
+		<label class="choice">Ending <input type="date" id="solar-anchor" aria-label="Solar period ending"></label>
+		<label class="choice"><input type="checkbox" id="solar-compare"> Compare a year earlier</label>
+		<a class="csv" id="solar-csv" href="api/energy/solar.csv?range=month">Solar CSV</a>
+		<a class="csv" id="house-csv" href="api/energy/house.csv?range=month">House CSV</a>
+	</div>
+	<div class="grid-cards" id="solar-cards"></div>
+	<p class="error" id="solar-error" hidden></p>
+	<p class="note">Solar generation, split into the house, the battery and the grid, and the house's electricity split into solar, battery and grid. Self-consumed is the share of solar used on site. Self-sufficient is the share of the house's electricity that did not come from the grid. These flows are filled in on the next sync; the first run back-fills from the installation date.</p>
 	</div>
 
 	<div role="tabpanel" id="panel-grid" aria-labelledby="tab-grid" hidden>
@@ -260,10 +336,26 @@
 			<button type="button" data-range="month">Month</button>
 			<button type="button" data-range="year">Year</button>
 		</div>
+		<label class="choice">Ending <input type="date" id="grid-anchor" aria-label="Grid period ending"></label>
+		<label class="choice"><input type="checkbox" id="grid-compare"> Compare a year earlier</label>
+		<a class="csv" id="export-csv" href="api/grid/exports.csv?range=month">Export CSV</a>
+		<a class="csv" id="import-csv" href="api/grid/imports.csv?range=month">Import CSV</a>
 	</div>
+	<section class="card" id="bill" hidden></section>
 	<div class="grid-cards" id="grid-cards"></div>
+	<section class="card" id="half-hour-card" aria-labelledby="half-hour-title">
+		<div class="card-head">
+			<h2 class="card-title" id="half-hour-title">When energy moved</h2>
+		</div>
+		<div class="chart-wrap" id="half-hour-wrap">
+			<svg id="half-hour-chart" class="flow-chart" tabindex="0" role="img" aria-labelledby="half-hour-title"></svg>
+			<div class="empty" id="half-hour-empty" hidden></div>
+			<div class="tooltip" id="half-hour-tooltip" hidden></div>
+		</div>
+		<p class="note" id="half-hour-note">The last two days, half-hourly, including today. Shaded bands are the off-peak window. Bars are import; the line is export.</p>
+	</section>
 	<p class="error" id="grid-error" hidden></p>
-	<p class="note">Energy sent to the grid (split into what came straight from solar and what the battery discharged) and energy bought from the grid (split into what went straight to the house and what charged the battery). Both charts share one scale so they can be compared. Money is at today's tariff for the whole history; import is time-of-use, so it's split by when it was imported. Each day is fetched from GivEnergy just after midnight; today isn't included until then.</p>
+	<p class="note">Energy sent to the grid (split into what came straight from solar and what the battery discharged) and energy bought from the grid (split into what went straight to the house and what charged the battery). Both charts share one scale so they can be compared. Each day keeps the prices from when it was first saved, so a tariff change leaves older months alone. The net adds one standing charge per day and subtracts export earnings. Daily bars run through yesterday; today is in the header and the half-hourly chart.</p>
 	</div>
 </main>
 
@@ -300,10 +392,25 @@
 	const RANGES = {
 		day: { title: "Last 24 hours, hourly", spanMs: 24 * 3600e3 },
 		week: { title: "Last 7 days, daily", spanMs: 7 * 86400e3 },
+		month: { title: "Last 30 days, daily", spanMs: 30 * 86400e3 },
 		year: { title: "Last 12 months, daily", spanMs: 365 * 86400e3 },
 	};
 	const M = { top: 16, right: 12, bottom: 28, left: 40 };
 	const SVG_NS = "http://www.w3.org/2000/svg";
+	window.energy = {
+		inverter: "",
+		params(extra) {
+			const query = new URLSearchParams();
+			for (const [key, value] of Object.entries(extra || {})) {
+				if (value !== undefined && value !== null && value !== "" && value !== false) query.set(key, value);
+			}
+			if (this.inverter) query.set("inverter", this.inverter);
+			const text = query.toString();
+			return text ? `?${text}` : "";
+		},
+	};
+	try { window.energy.inverter = localStorage.getItem("inverter") || ""; } catch (e) { /* storage unavailable */ }
+	const energy = window.energy;
 
 	const svg = document.getElementById("chart");
 	const wrap = document.getElementById("chart-wrap");
@@ -344,7 +451,20 @@
 		}
 		return start.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 	}
+	function rangeTitle() {
+		const anchor = document.getElementById("battery-anchor").value;
+		if (!anchor) return RANGES[range].title;
+		const end = new Date(anchor + "T12:00:00");
+		const day = end.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+		if (range === "day") return `${day}, hourly`;
+		if (range === "week") return `7 days ending ${day}, daily`;
+		if (range === "month") return `${end.toLocaleDateString(undefined, { month: "long", year: "numeric" })}, daily`;
+		return `12 months ending ${end.toLocaleDateString(undefined, { month: "short", year: "numeric" })}, daily`;
+	}
 	function direction(c) { return c.close > c.open ? "rise" : c.close < c.open ? "fall" : "flat"; }
+	function fmtClock(iso) {
+		return new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+	}
 	function moveText(c) {
 		const d = c.close - c.open;
 		return d === 0 ? "No change" : `${d > 0 ? "+" : "−"}${Math.abs(d)} pts`;
@@ -354,12 +474,16 @@
 	async function load() {
 		wrap.classList.add("loading");
 		errorEl.hidden = true;
+		const anchor = document.getElementById("battery-anchor").value;
+		const compare = document.getElementById("battery-compare").checked;
+		document.getElementById("battery-csv").href = "api/battery/candles.csv" + energy.params({ range, anchor, compare: compare ? "true" : "" });
 		try {
-			const res = await fetch(`api/battery/candles?range=${range}`);
+			const res = await fetch("api/battery/candles" + energy.params({ range, anchor, compare: compare ? "true" : "" }));
 			if (!res.ok) throw new Error(await problemText(res));
 			chart = await res.json();
 			render();
 			renderTable();
+			renderComparison();
 		} catch (e) {
 			// Keep the previous candles if we had some; otherwise draw an empty frame so the error sits in the chart.
 			if (!chart) {
@@ -372,22 +496,107 @@
 		} finally {
 			wrap.classList.remove("loading");
 		}
+		loadPower();
 	}
 
+	function renderComparison() {
+		const note = document.getElementById("battery-compare-note");
+		const earlier = chart && chart.comparison;
+		if (!earlier || !earlier.candles.length || !chart.candles.length) { note.hidden = true; return; }
+		note.hidden = false;
+		if (chart.bucket === "hour") {
+			note.textContent = `A year earlier this period closed at ${earlier.candles.at(-1).close}% (this period ${chart.candles.at(-1).close}%).`;
+		} else {
+			note.textContent = `Charged ${chart.chargedKwh.toFixed(1)} kWh; a year earlier ${earlier.chargedKwh.toFixed(1)} kWh.`;
+		}
+	}
+
+	function metric(label, value, soc) {
+		const node = document.createElement("div");
+		node.className = soc ? "metric soc" : "metric";
+		const v = document.createElement("div");
+		v.className = "metric-value";
+		v.textContent = value;
+		const l = document.createElement("div");
+		l.className = "metric-label";
+		l.textContent = label;
+		node.append(v, l);
+		return node;
+	}
+	function watts(n) {
+		const abs = Math.abs(n);
+		return abs >= 1000 ? `${(n / 1000).toFixed(1)} kW` : `${Math.round(n)} W`;
+	}
 	async function loadNow() {
 		try {
-			const res = await fetch("api/battery");
+			const res = await fetch("api/battery" + energy.params());
 			if (!res.ok) throw new Error(await problemText(res));
 			const s = await res.json();
-			document.getElementById("now-value").textContent = `${s.stateOfChargePercent}%`;
-			const power = s.state === "CHARGING" ? `Charging · ${s.chargePowerWatts} W`
-				: s.state === "DISCHARGING" ? `Discharging · ${s.dischargePowerWatts} W` : "Idle";
-			document.getElementById("now-detail").textContent = power;
+			const power = s.power || {};
+			const grid = power.gridExportWatts > 0 ? `Export ${watts(power.gridExportWatts)}`
+				: power.gridImportWatts > 0 ? `Import ${watts(power.gridImportWatts)}` : "Idle";
+			const battery = s.state === "CHARGING" ? `Charging ${watts(s.chargePowerWatts)}`
+				: s.state === "DISCHARGING" ? `Discharging ${watts(s.dischargePowerWatts)}` : "Idle";
+			const today = s.today || {};
+			const box = document.getElementById("now");
+			box.replaceChildren(
+				metric("State of charge", `${s.stateOfChargePercent}%`, true),
+				metric("Battery", battery),
+				metric("Solar", watts(power.solarWatts || 0)),
+				metric("House", watts(power.consumptionWatts || 0)),
+				metric("Grid", grid),
+				metric("Battery temperature", s.temperatureCelsius == null ? "–" : `${s.temperatureCelsius}°C`),
+				metric("Inverter", s.inverterStatus || "–"),
+				metric("Solar today", `${(today.solarKwh || 0).toFixed(1)} kWh`),
+				metric("Import today", `${(today.gridImportKwh || 0).toFixed(1)} kWh`),
+				metric("Export today", `${(today.gridExportKwh || 0).toFixed(1)} kWh`),
+				metric("House today", `${(today.consumptionKwh || 0).toFixed(1)} kWh`),
+			);
 			document.getElementById("subtitle").textContent = `Inverter ${s.inverterSerial}`;
-			document.getElementById("now").hidden = false;
+			box.hidden = false;
 		} catch (e) {
 			document.getElementById("now").hidden = true;
 		}
+	}
+
+	async function loadAlerts() {
+		try {
+			const res = await fetch("api/alerts");
+			if (!res.ok) return;
+			const alerts = await res.json();
+			const box = document.getElementById("alerts");
+			box.replaceChildren(...alerts.map(alert => {
+				const p = document.createElement("p");
+				p.textContent = alert.message;
+				return p;
+			}));
+			box.hidden = alerts.length === 0;
+		} catch (e) { /* alerts are optional */ }
+	}
+
+	async function loadInverters() {
+		try {
+			const res = await fetch("api/inverters");
+			if (!res.ok) return;
+			const list = await res.json();
+			if (list.length < 2) return;
+			const select = document.getElementById("inverter");
+			const label = document.getElementById("inverter-label");
+			select.replaceChildren(...list.map(inv => {
+				const option = document.createElement("option");
+				option.value = inv.serial;
+				option.textContent = inv.model ? `${inv.serial} · ${inv.model}` : inv.serial;
+				return option;
+			}));
+			if (energy.inverter && list.some(inv => inv.serial === energy.inverter)) select.value = energy.inverter;
+			else energy.inverter = select.value;
+			label.hidden = false;
+			select.addEventListener("change", () => {
+				energy.inverter = select.value;
+				try { localStorage.setItem("inverter", select.value); } catch (e) { /* storage unavailable */ }
+				window.dispatchEvent(new Event("inverter-change"));
+			});
+		} catch (e) { /* a single inverter needs no picker */ }
 	}
 
 	async function problemText(res) {
@@ -411,10 +620,12 @@
 		const candles = chart.candles;
 		const now = Date.now();
 		const bucketMs = chart.bucket === "hour" ? 3600e3 : 86400e3;
-		// Domain ends at the end of the current bucket so the latest (partial) candle sits at the right edge.
+		const anchor = document.getElementById("battery-anchor").value;
 		const last = candles.length ? Date.parse(candles[candles.length - 1].end) : now;
-		const x1 = Math.max(last, now);
-		const x0 = x1 - RANGES[range].spanMs;
+		const first = candles.length ? Date.parse(candles[0].start) : last - RANGES[range].spanMs;
+		// A chosen ending date looks at that period, so the axis follows the candles rather than today.
+		const x1 = anchor && candles.length ? last : Math.max(last, now);
+		const x0 = anchor && candles.length ? first : x1 - RANGES[range].spanMs;
 		const pw = width - M.left - M.right;
 		const ph = height - M.top - M.bottom;
 		const x = t => M.left + ((t - x0) / (x1 - x0)) * pw;
@@ -467,11 +678,11 @@
 		layout = { centers, candles, hover, y, height, slot };
 		empty.hidden = candles.length > 0;
 		if (!candles.length) {
-			empty.textContent = range === "day"
+			empty.textContent = range === "day" && !document.getElementById("battery-anchor").value
 				? "No readings recorded in the last 24 hours. Is the app polling GivEnergy?"
 				: "No readings recorded in this period yet.";
 		}
-		document.getElementById("chart-title").textContent = `State of charge · ${RANGES[range].title}`;
+		document.getElementById("chart-title").textContent = `State of charge · ${rangeTitle()}`;
 		document.getElementById("chart-desc").textContent = describe(candles);
 		if (active >= candles.length) active = -1;
 		if (active >= 0) showActive(false);
@@ -587,8 +798,10 @@
 			const l = document.createElement("span"); l.textContent = label;
 			r.append(s, l);
 		};
-		row(`${c.high}%`, "High");
-		row(`${c.low}%`, "Low");
+		row(c.highAt ? `${c.high}% · ${fmtClock(c.highAt)}` : `${c.high}%`, "High");
+		row(c.lowAt ? `${c.low}% · ${fmtClock(c.lowAt)}` : `${c.low}%`, "Low");
+		if (c.maxChargePowerWatts) row(`${c.maxChargePowerWatts} W`, "Peak charge");
+		if (c.maxDischargePowerWatts) row(`${c.maxDischargePowerWatts} W`, "Peak discharge");
 		if (c.chargedKwh != null) row(`${c.chargedKwh.toFixed(1)} kWh`, "Charged");
 		if (c.dischargedKwh != null) row(`${c.dischargedKwh.toFixed(1)} kWh`, "Discharged");
 		add("div", "tooltip-note", `${c.readingCount} reading${c.readingCount === 1 ? "" : "s"}`);
@@ -649,43 +862,96 @@
 	buttons.forEach(b => b.addEventListener("click", () => selectRange(b.dataset.range)));
 
 	new ResizeObserver(() => render()).observe(svg);
+	document.getElementById("battery-anchor").addEventListener("change", () => load());
+	document.getElementById("battery-compare").addEventListener("change", () => load());
+	window.addEventListener("inverter-change", () => { load(); loadNow(); });
+	const powerSvg = document.getElementById("power-chart");
+	const powerEmpty = document.getElementById("power-empty");
+	const powerCard = document.getElementById("power-card");
+	let powerPoints = [];
+	async function loadPower() {
+		const show = range === "day" || range === "week";
+		powerCard.hidden = !show;
+		document.getElementById("power-note").hidden = !show;
+		if (!show) return;
+		try {
+			const res = await fetch("api/battery/traces" + energy.params({ range }));
+			if (!res.ok) throw new Error(await problemText(res));
+			powerPoints = (await res.json()).points || [];
+			renderPower();
+		} catch (e) {
+			powerPoints = [];
+			powerEmpty.hidden = false;
+			powerEmpty.textContent = "Couldn't load the power trace.";
+		}
+	}
+	function renderPower() {
+		const width = powerSvg.clientWidth, height = powerSvg.clientHeight;
+		if (!width) return;
+		powerSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+		powerSvg.replaceChildren();
+		if (!powerPoints.length) {
+			powerEmpty.hidden = false;
+			powerEmpty.textContent = "No readings stored for this period yet.";
+			return;
+		}
+		powerEmpty.hidden = true;
+		const pad = { top: 16, right: 36, bottom: 24, left: 44 };
+		const pw = width - pad.left - pad.right, ph = height - pad.top - pad.bottom;
+		const times = powerPoints.map(p => Date.parse(p.time));
+		const t0 = times[0], t1 = Math.max(times[times.length - 1], t0 + 1);
+		const x = t => pad.left + ((t - t0) / (t1 - t0)) * pw;
+		const samples = powerPoints.map(p => ({
+			solar: p.solarPowerWatts || 0, house: p.consumptionPowerWatts || 0,
+			battery: (p.dischargePowerWatts || 0) - (p.chargePowerWatts || 0), temp: p.temperatureCelsius,
+		}));
+		const wattValues = samples.flatMap(s => [s.solar, s.house, s.battery]);
+		let minW = Math.min(0, ...wattValues), maxW = Math.max(...wattValues, 1);
+		if (minW === maxW) maxW = minW + 1;
+		const y = v => pad.top + (1 - (v - minW) / (maxW - minW)) * ph;
+		const temps = samples.map(s => s.temp).filter(v => v != null);
+		let minT = temps.length ? Math.min(...temps) : 0;
+		let maxT = temps.length ? Math.max(...temps) : 1;
+		if (minT === maxT) { minT -= 1; maxT += 1; }
+		const yT = v => pad.top + (1 - (v - minT) / (maxT - minT)) * ph;
+		const axis = el("g", { "aria-hidden": "true" }, powerSvg);
+		el("line", { x1: pad.left, x2: width - pad.right, y1: y(0), y2: y(0), class: "baseline" }, axis);
+		el("text", { x: pad.left - 6, y: y(maxW) + 4, "text-anchor": "end", class: "tick" }, axis).textContent = `${Math.round(maxW)}`;
+		el("text", { x: pad.left - 6, y: y(minW), "text-anchor": "end", class: "tick" }, axis).textContent = "W";
+		if (temps.length) {
+			el("text", { x: width - 4, y: yT(maxT) + 4, "text-anchor": "end", class: "tick" }, axis).textContent = `${Math.round(maxT)}°`;
+			el("text", { x: width - 4, y: yT(minT), "text-anchor": "end", class: "tick" }, axis).textContent = `${Math.round(minT)}°`;
+		}
+		const draw = (key, scale, cls) => {
+			let d = "";
+			samples.forEach((sample, i) => {
+				if (sample[key] == null) return;
+				const cmd = d ? "L" : "M";
+				d += `${cmd}${x(times[i]).toFixed(1)},${scale(sample[key]).toFixed(1)}`;
+			});
+			if (d) el("path", { d, class: `trace ${cls}` }, powerSvg);
+		};
+		draw("solar", y, "solar");
+		draw("house", y, "house");
+		draw("battery", y, "battery");
+		draw("temp", yT, "temp");
+		powerSvg.setAttribute("aria-label", `Power and temperature, ${powerPoints.length} points.`);
+	}
+	new ResizeObserver(() => renderPower()).observe(powerSvg);
 	selectRange(range);
 	loadNow();
+	loadAlerts();
+	loadInverters();
 	// Readings arrive every 5 minutes; refresh to match.
-	setInterval(() => { load(); loadNow(); }, 5 * 60e3);
+	setInterval(() => { load(); loadNow(); loadAlerts(); }, 5 * 60e3);
 })();
 </script>
 <script>
 (() => {
+	const energy = window.energy;
 	const SVG_NS = "http://www.w3.org/2000/svg";
 	const M = { top: 24, right: 12, bottom: 28, left: 44 };
 	const RANGES = ["yesterday", "week", "month", "year"];
-	// Stacking order is bottom to top; colours follow the page's fixed categorical order.
-	const FLOWS = [
-		{
-			key: "export", endpoint: "api/grid/exports", title: "Exported to the grid", verb: "exported", moneyLabel: "earned",
-			parts: [
-				{ key: "solarToGrid", label: "Solar → grid", short: "Solar", color: "var(--series-1)" },
-				{ key: "batteryToGrid", label: "Battery → grid", short: "Battery", color: "var(--series-2)" },
-			],
-		},
-		{
-			key: "import", endpoint: "api/grid/imports", title: "Imported from the grid", verb: "imported", moneyLabel: "cost",
-			parts: [
-				{ key: "gridToHome", label: "Grid → home", short: "Home", color: "var(--series-3)" },
-				{ key: "gridToBattery", label: "Grid → battery", short: "Battery", color: "var(--series-4)" },
-			],
-		},
-	];
-	const cards = document.getElementById("grid-cards");
-	const errorEl = document.getElementById("grid-error");
-	const buttons = document.querySelectorAll("#grid-range button");
-
-	let range = "month";
-	try {
-		const saved = localStorage.getItem("grid-range") || localStorage.getItem("export-range");
-		if (RANGES.includes(saved)) range = saved;
-	} catch (e) { /* storage unavailable */ }
 
 	// ---- helpers --------------------------------------------------------
 	const kwh = v => `${v.toLocaleString(undefined, { maximumFractionDigits: v >= 100 ? 0 : 1, minimumFractionDigits: v >= 100 ? 0 : 1 })} kWh`;
@@ -730,6 +996,14 @@
 		return 10 * p;
 	}
 
+	function start(options) {
+	const FLOWS = options.flows;
+	const cards = options.cards;
+	const errorEl = options.errorEl;
+	const buttons = options.buttons;
+	let range = options.initialRange;
+	let halfChart = null;
+
 	// ---- cards -------------------------------------------------------------
 	for (const flow of FLOWS) {
 		const id = `${flow.key}-title`;
@@ -770,13 +1044,19 @@
 
 	// ---- data ---------------------------------------------------------------
 	async function fetchView(flow) {
-		const res = await fetch(`${flow.endpoint}?range=${range}`);
+		const anchor = options.anchor && options.anchor.value;
+		const compare = options.compare && options.compare.checked;
+		const res = await fetch(flow.endpoint + energy.params({ range, anchor, compare: compare ? "true" : "" }));
 		if (!res.ok) {
 			let msg = `HTTP ${res.status}`;
 			try { const b = await res.json(); msg = b.detail || b.error || msg; } catch (e) { /* not JSON */ }
 			throw new Error(msg);
 		}
 		return res.json();
+	}
+
+	function queryExtras() {
+		return { range, anchor: options.anchor && options.anchor.value, compare: options.compare && options.compare.checked ? "true" : "" };
 	}
 
 	async function load() {
@@ -786,6 +1066,8 @@
 			const views = await Promise.all(FLOWS.map(fetchView));
 			FLOWS.forEach((f, i) => { f.view = views[i]; f.active = -1; });
 			renderAll();
+			if (options.bill) loadBill();
+			if (options.halfHour) loadHalfHours();
 		} catch (e) {
 			errorEl.textContent = `Couldn't load grid data: ${e.message}`;
 			errorEl.hidden = false;
@@ -818,12 +1100,25 @@
 		const unit = h("small", {}, `kWh ${flow.verb}`);
 		flow.total.replaceChildren(has ? v.totalKwh.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) : "–", unit);
 		flow.parts.forEach((part, i) => { flow.split[i].textContent = has ? kwh(v.kwh[part.key]) : "–"; });
-		flow.money.replaceChildren(has ? gbp.format(v.amountGbp) : "–", h("small", {}, flow.moneyLabel));
-		flow.rates.replaceChildren(...rateLine(flow, v, v.kwhByRate, v.totalKwh, has));
+		if (flow.moneyLabel) {
+			flow.money.hidden = false;
+			flow.money.replaceChildren(has ? gbp.format(v.amountGbp) : "–", h("small", {}, flow.moneyLabel));
+			flow.rates.replaceChildren(...rateLine(flow, v, v.kwhByRate, v.totalKwh, has));
+		} else {
+			flow.money.hidden = true;
+			const ratios = [];
+			if (v.selfConsumptionRatio != null) ratios.push(`Self-consumed ${Math.round(v.selfConsumptionRatio * 100)}%`);
+			if (v.selfSufficiencyRatio != null) ratios.push(`Self-sufficient ${Math.round(v.selfSufficiencyRatio * 100)}%`);
+			flow.rates.textContent = ratios.join(" · ");
+		}
 		const missing = v.bars.reduce((n, b) => n + (b.days === 0 ? 1 : 0), 0);
 		let period = periodText(v);
 		if (!has) period += " · no data stored yet";
 		else if (v.bucket === "day" && missing) period += ` · ${missing} day${missing === 1 ? "" : "s"} without data`;
+		if (v.comparison && v.comparison.days > 0) {
+			period += ` · a year earlier ${kwh(v.comparison.totalKwh)}`;
+			if (flow.moneyLabel) period += ` (${gbp.format(v.comparison.amountGbp)})`;
+		}
 		flow.period.textContent = period;
 	}
 
@@ -834,6 +1129,14 @@
 	function rateLine(flow, v, byRate, total, has) {
 		const t = v.tariff;
 		const item = (label, value, rate) => [label ? `${label} ` : "", h("strong", {}, has ? kwh(value) : "–"), ` × ${pence(rate)}`];
+		if (v.mixedTariff) {
+			if (flow.key !== "import") return ["Priced at the rate stored for each day"];
+			return [
+				h("div", {}, `Off-peak `, h("strong", {}, has ? gbp.format(v.amountGbpByRate.offPeak) : "–"), ` · ${has ? kwh(byRate.offPeak) : "–"}`),
+				h("div", {}, `Peak `, h("strong", {}, has ? gbp.format(v.amountGbpByRate.peak) : "–"), ` · ${has ? kwh(byRate.peak) : "–"}`),
+				"Priced at the rate stored for each day",
+			];
+		}
 		if (flow.key === "export") return item("", total, t.exportPence);
 		const rate = (label, key, unitPence, suffix) => h("div", {}, `${label} `, h("strong", {}, has ? gbp.format(v.amountGbpByRate[key]) : "–"),
 			` · ${has ? kwh(byRate[key]) : "–"} × ${pence(unitPence)}${suffix}`);
@@ -947,7 +1250,9 @@
 				const key = h("i", { className: "key" }); key.style.background = part.color; key.setAttribute("aria-hidden", "true");
 				tooltip.append(h("div", { className: "tooltip-row" }, h("strong", {}, kwh(b.kwh[part.key])), h("span", { className: "label" }, key, part.label)));
 			}
-			tooltip.append(h("div", { className: "tooltip-row tooltip-money" }, h("strong", {}, gbp.format(b.amountGbp)), h("span", {}, flow.moneyLabel)));
+			if (flow.moneyLabel) {
+				tooltip.append(h("div", { className: "tooltip-row tooltip-money" }, h("strong", {}, gbp.format(b.amountGbp)), h("span", {}, flow.moneyLabel)));
+			}
 			if (flow.key === "import") {
 				tooltip.append(h("div", { className: "tooltip-note" },
 					h("div", {}, `Off-peak ${gbp.format(b.amountGbpByRate.offPeak)} · ${kwh(b.kwhByRate.offPeak)}`),
@@ -992,13 +1297,14 @@
 	function renderTable(flow) {
 		const v = flow.view;
 		const imp = flow.key === "import";
-		const cols = [v.bucket === "month" ? "Month" : "Day", ...flow.parts.map(p => p.label), "Total", ...(imp ? ["Off-peak", "Peak", "Off-peak cost", "Peak cost"] : []), flow.moneyLabel === "cost" ? "Cost" : "Earned"];
+		const money = flow.moneyLabel === "cost" ? "Cost" : flow.moneyLabel === "earned" ? "Earned" : null;
+		const cols = [v.bucket === "month" ? "Month" : "Day", ...flow.parts.map(p => p.label), "Total", ...(imp ? ["Off-peak", "Peak", "Off-peak cost", "Peak cost"] : []), ...(money ? [money] : [])];
 		flow.tableHead.replaceChildren(...cols.map(c => h("th", {}, c)));
 		flow.tableBody.replaceChildren(...[...v.bars].reverse().map(b => {
 			const cells = b.days === 0 ? [barLabel(v, b), ...cols.slice(1).map(() => "–")]
 				: [barLabel(v, b), ...flow.parts.map(p => kwh(b.kwh[p.key])), kwh(b.totalKwh),
 					...(imp ? [kwh(b.kwhByRate.offPeak), kwh(b.kwhByRate.peak),
-						gbp.format(b.amountGbpByRate.offPeak), gbp.format(b.amountGbpByRate.peak)] : []), gbp.format(b.amountGbp)];
+						gbp.format(b.amountGbpByRate.offPeak), gbp.format(b.amountGbpByRate.peak)] : []), ...(flow.moneyLabel ? [gbp.format(b.amountGbp)] : [])];
 			return h("tr", {}, ...cells.map(c => h("td", {}, c)));
 		}));
 	}
@@ -1007,14 +1313,177 @@
 	function selectRange(r) {
 		range = r;
 		buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.range === r)));
-		try { localStorage.setItem("grid-range", r); } catch (e) { /* storage unavailable */ }
+		try { localStorage.setItem(options.storageKey, r); } catch (e) { /* storage unavailable */ }
+		if (options.csv) options.csv.forEach(link => { link.el.href = link.path + energy.params(queryExtras()); });
 		load();
 	}
 	buttons.forEach(b => b.addEventListener("click", () => selectRange(b.dataset.range)));
-	new ResizeObserver(() => renderAll()).observe(cards);
+	if (options.anchor) options.anchor.addEventListener("change", () => load());
+	if (options.compare) options.compare.addEventListener("change", () => load());
+	new ResizeObserver(() => { renderAll(); if (options.halfHour) renderHalf(halfChart); }).observe(cards);
 	selectRange(range);
-	// New days arrive once a night; an hourly refresh keeps an open page current.
-	setInterval(load, 3600e3);
+	if (options.refreshMs) setInterval(load, options.refreshMs);
+
+	async function loadBill() {
+		const billEl = document.getElementById("bill");
+		try {
+			const res = await fetch("api/grid/bill" + energy.params(queryExtras()));
+			if (!res.ok) throw new Error();
+			const bill = await res.json();
+			const earlier = bill.comparison && bill.comparison.days
+				? h("div", { className: "bill-part" }, "A year earlier ", h("strong", {}, gbp.format(bill.comparison.netGbp)))
+				: null;
+			billEl.replaceChildren(h("div", { className: "bill-row" },
+				h("div", {}, h("div", { className: "bill-net" }, gbp.format(bill.netGbp), h("small", {}, " net")), h("div", { className: "bill-part" }, periodText(bill))),
+				h("div", { className: "bill-part" }, h("strong", {}, gbp.format(bill.importGbp)), " import"),
+				h("div", { className: "bill-part" }, h("strong", {}, gbp.format(bill.standingChargeGbp)), " standing charge"),
+				h("div", { className: "bill-part" }, h("strong", {}, gbp.format(bill.exportGbp)), " export earnings"),
+				...(earlier ? [earlier] : [])));
+			billEl.hidden = false;
+		} catch (e) {
+			billEl.hidden = true;
+		}
+	}
+	async function loadHalfHours() {
+		try {
+			const res = await fetch("api/grid/half-hours" + energy.params({ days: 2 }));
+			if (!res.ok) throw new Error();
+			halfChart = await res.json();
+			const note = document.getElementById("half-hour-note");
+			if (halfChart.offPeakStart) note.textContent = `The last two days, half-hourly, including today. Shaded bands are off-peak (${hhmm(halfChart.offPeakStart)}–${hhmm(halfChart.offPeakEnd)}). Bars are import; the line is export.`;
+			renderHalf(halfChart);
+		} catch (e) {
+			document.getElementById("half-hour-empty").hidden = false;
+			document.getElementById("half-hour-empty").textContent = "Couldn't load half-hourly data.";
+		}
+	}
+	function renderHalf(chart) {
+		const svg = document.getElementById("half-hour-chart");
+		const empty = document.getElementById("half-hour-empty");
+		const width = svg.clientWidth, height = svg.clientHeight;
+		if (!width || !chart) return;
+		svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+		svg.replaceChildren();
+		const buckets = chart.buckets || [];
+		if (!buckets.length) {
+			empty.hidden = false;
+			empty.textContent = "Half-hourly history appears after the next sync.";
+			return;
+		}
+		empty.hidden = true;
+		const peak = Math.max(0, ...buckets.map(b => Math.max(b.importKwh, b.exportKwh)));
+		const step = niceStep(peak);
+		const maxV = Math.max(step, Math.ceil(peak / step) * step);
+		const pw = width - M.left - M.right, ph = height - M.top - M.bottom;
+		const y = v => M.top + (1 - v / maxV) * ph;
+		const band = pw / buckets.length;
+		const barW = Math.max(1, band * 0.72);
+		const cx = i => M.left + band * (i + 0.5);
+		const axis = svgEl("g", { "aria-hidden": "true" }, svg);
+		for (let k = 0; k * step <= maxV + 1e-9; k++) {
+			const v = step * k;
+			svgEl("line", { x1: M.left, x2: width - M.right, y1: y(v), y2: y(v), class: k === 0 ? "baseline" : "grid" }, axis);
+			svgEl("text", { x: M.left - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" }, axis).textContent =
+				v === 0 ? "0" : String(Math.round(v * 10) / 10);
+		}
+		svgEl("text", { x: M.left - 8, y: M.top - 12, "text-anchor": "end", class: "tick" }, axis).textContent = "kWh";
+		buckets.forEach((b, i) => {
+			if (!b.offPeak) return;
+			svgEl("rect", { x: cx(i) - band / 2, y: M.top, width: band, height: ph, class: "offpeak" }, axis);
+		});
+		const every = Math.max(1, Math.ceil(8 / band));
+		buckets.forEach((b, i) => {
+			if (i % every !== 0) return;
+			const start = new Date(b.start);
+			svgEl("text", { x: cx(i), y: height - 8, "text-anchor": "middle", class: "tick" }, axis).textContent =
+				start.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+		});
+		buckets.forEach((b, i) => {
+			let base = 0;
+			for (const [key, color] of [["gridToHome", "var(--series-3)"], ["gridToBattery", "var(--series-4)"]]) {
+				const value = b.kwh[key] || 0;
+				if (value <= 0) continue;
+				const top = y(base + value), bottom = y(base);
+				svgEl("rect", { x: cx(i) - barW / 2, y: top, width: barW, height: Math.max(0, bottom - top), style: `fill: ${color}` }, svg);
+				base += value;
+			}
+		});
+		let d = "";
+		buckets.forEach((b, i) => {
+			d += `${d ? "L" : "M"}${cx(i).toFixed(1)},${y(b.exportKwh).toFixed(1)}`;
+		});
+		if (d) svgEl("path", { d, class: "export-line" }, svg);
+		svg.setAttribute("aria-label", `Half-hourly import and export from ${chart.from} to ${chart.to}.`);
+	}
+	}
+
+	let gridRange = "month";
+	try {
+		const saved = localStorage.getItem("grid-range") || localStorage.getItem("export-range");
+		if (RANGES.includes(saved)) gridRange = saved;
+	} catch (e) { /* storage unavailable */ }
+	let solarRange = "month";
+	try {
+		const saved = localStorage.getItem("solar-range");
+		if (RANGES.includes(saved)) solarRange = saved;
+	} catch (e) { /* storage unavailable */ }
+
+	const gridFlows = [
+		{
+			key: "export", endpoint: "api/grid/exports", title: "Exported to the grid", verb: "exported", moneyLabel: "earned",
+			parts: [
+				{ key: "solarToGrid", label: "Solar → grid", short: "Solar", color: "var(--series-1)" },
+				{ key: "batteryToGrid", label: "Battery → grid", short: "Battery", color: "var(--series-2)" },
+			],
+		},
+		{
+			key: "import", endpoint: "api/grid/imports", title: "Imported from the grid", verb: "imported", moneyLabel: "cost",
+			parts: [
+				{ key: "gridToHome", label: "Grid → home", short: "Home", color: "var(--series-3)" },
+				{ key: "gridToBattery", label: "Grid → battery", short: "Battery", color: "var(--series-4)" },
+			],
+		},
+	];
+	const solarFlows = [
+		{
+			key: "solar", endpoint: "api/energy/solar", title: "Solar generation", verb: "generated", moneyLabel: null,
+			parts: [
+				{ key: "solarToHome", label: "Solar → home", short: "Home", color: "var(--series-3)" },
+				{ key: "solarToBattery", label: "Solar → battery", short: "Battery", color: "var(--series-2)" },
+				{ key: "solarToGrid", label: "Solar → grid", short: "Grid", color: "var(--series-1)" },
+			],
+		},
+		{
+			key: "house", endpoint: "api/energy/house", title: "Used in the house", verb: "used", moneyLabel: null,
+			parts: [
+				{ key: "solarToHome", label: "Solar → home", short: "Solar", color: "var(--series-1)" },
+				{ key: "batteryToHome", label: "Battery → home", short: "Battery", color: "var(--series-2)" },
+				{ key: "gridToHome", label: "Grid → home", short: "Grid", color: "var(--series-4)" },
+			],
+		},
+	];
+	start({
+		flows: gridFlows, cards: document.getElementById("grid-cards"), errorEl: document.getElementById("grid-error"),
+		buttons: document.querySelectorAll("#grid-range button"), initialRange: gridRange, storageKey: "grid-range",
+		anchor: document.getElementById("grid-anchor"), compare: document.getElementById("grid-compare"),
+		csv: [
+			{ el: document.getElementById("export-csv"), path: "api/grid/exports.csv" },
+			{ el: document.getElementById("import-csv"), path: "api/grid/imports.csv" },
+		],
+		bill: true, halfHour: true, refreshMs: 3600e3,
+	});
+	start({
+		flows: solarFlows, cards: document.getElementById("solar-cards"), errorEl: document.getElementById("solar-error"),
+		buttons: document.querySelectorAll("#solar-range button"), initialRange: solarRange, storageKey: "solar-range",
+		anchor: document.getElementById("solar-anchor"), compare: document.getElementById("solar-compare"),
+		csv: [
+			{ el: document.getElementById("solar-csv"), path: "api/energy/solar.csv" },
+			{ el: document.getElementById("house-csv"), path: "api/energy/house.csv" },
+		],
+	});
+	window.addEventListener("inverter-change", () => {
+		document.querySelectorAll("#grid-range button[aria-pressed='true'], #solar-range button[aria-pressed='true']").forEach(button => button.click());
+	});
 })();
 </script>
 </body>

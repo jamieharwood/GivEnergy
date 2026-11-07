@@ -73,6 +73,10 @@ class GivEnergyClientTests {
 
 		assertThat(data.today().battery().charge()).isEqualTo(3.4);
 		assertThat(data.today().battery().discharge()).isEqualTo(1.1);
+		assertThat(data.today().solar()).isEqualTo(5.1);
+		assertThat(data.today().grid().imported()).isEqualTo(1.2);
+		assertThat(data.total().consumption()).isEqualTo(1500.0);
+		assertThat(data.total().grid().exported()).isEqualTo(200.0);
 	}
 
 	@Test

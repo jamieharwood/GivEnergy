@@ -32,34 +32,39 @@ class CandleServiceTests {
 
 	@Test
 	void dayViewIsHourlyCandlesOverTheLast24Hours() {
-		given(readings.findByTimeInRange(Instant.parse("2026-09-29T14:00:00Z"), NOW.plusSeconds(1)))
+		given(readings.findByInverterSerialAndTimeInRange("CE1", Instant.parse("2026-09-29T14:00:00Z"),
+				NOW.plusSeconds(1)))
 				.willReturn(List.of(reading("2026-09-30T12:05:00Z", 60), reading("2026-09-30T12:55:00Z", 50),
 						reading("2026-09-30T12:30:00Z", 70), reading("2026-09-30T13:10:00Z", 52)));
 
-		CandleService.CandleChart chart = service.candles(CandleRange.DAY);
+		CandleService.CandleChart chart = service.candles("CE1", CandleRange.DAY, null, false);
 
 		assertThat(chart.bucket()).isEqualTo("hour");
 		assertThat(chart.candles()).containsExactly(
 				new Candle(Instant.parse("2026-09-30T12:00:00Z"), Instant.parse("2026-09-30T13:00:00Z"), 60, 70, 50,
-						50, 3, null, null),
+						50, 3, null, null, Instant.parse("2026-09-30T12:55:00Z"), Instant.parse("2026-09-30T12:30:00Z"),
+						0, 0),
 				new Candle(Instant.parse("2026-09-30T13:00:00Z"), Instant.parse("2026-09-30T14:00:00Z"), 52, 52, 52,
-						52, 1, null, null));
+						52, 1, null, null, Instant.parse("2026-09-30T13:10:00Z"), Instant.parse("2026-09-30T13:10:00Z"),
+						0, 0));
 	}
 
 	@Test
 	void weekViewIsPastSummariesPlusToday() {
-		given(summaries.findByDateInRange(LocalDate.of(2026, 9, 24), LocalDate.of(2026, 9, 29)))
+		given(summaries.findByInverterSerialAndDateInRange("CE1", LocalDate.of(2026, 9, 24), LocalDate.of(2026, 9, 29)))
 				.willReturn(List.of(new BatterySummary("CE1_2026-09-29", "CE1", LocalDate.of(2026, 9, 29),
 						"Europe/London", 288, 80, 30, 10, Instant.EPOCH, 100, Instant.EPOCH, 3000, 2500, 9.5, 8.0,
 						Instant.EPOCH)));
-		given(readings.findByTimeInRange(Instant.parse("2026-09-29T23:00:00Z"), Instant.parse("2026-09-30T23:00:00Z")))
+		given(readings.findByInverterSerialAndTimeInRange("CE1", Instant.parse("2026-09-29T23:00:00Z"),
+				Instant.parse("2026-09-30T23:00:00Z")))
 				.willReturn(List.of(reading("2026-09-30T05:00:00Z", 30), reading("2026-09-30T12:00:00Z", 90)));
 
-		List<Candle> candles = service.candles(CandleRange.WEEK).candles();
+		List<Candle> candles = service.candles("CE1", CandleRange.WEEK, null, false).candles();
 
 		assertThat(candles).hasSize(2);
 		assertThat(candles.getFirst()).isEqualTo(new Candle(Instant.parse("2026-09-28T23:00:00Z"),
-				Instant.parse("2026-09-29T23:00:00Z"), 80, 100, 10, 30, 288, 9.5, 8.0));
+				Instant.parse("2026-09-29T23:00:00Z"), 80, 100, 10, 30, 288, 9.5, 8.0, Instant.EPOCH, Instant.EPOCH,
+				3000, 2500));
 		assertThat(candles.getLast()).extracting(Candle::open, Candle::high, Candle::low, Candle::close)
 				.containsExactly(30, 90, 30, 90);
 	}
@@ -71,7 +76,8 @@ class CandleServiceTests {
 
 	private static BatteryReading reading(String time, int soc) {
 		Instant t = Instant.parse(time);
-		return new BatteryReading("CE1_" + t, "CE1", t, t, soc, BatteryState.IDLE, 0, 0, null, 1.0, 2.0);
+		return new BatteryReading("CE1_" + t, "CE1", t, t, soc, BatteryState.IDLE, 0, 0, null, 1.0, 2.0, null, null,
+				null, null, null);
 	}
 
 }

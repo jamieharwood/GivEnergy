@@ -11,8 +11,10 @@ public interface GridImportRepository extends MongoRepository<GridImport, String
 
 	Optional<GridImport> findTopByInverterSerialOrderByDateDesc(String inverterSerial);
 
-	/** Imports whose date falls in {@code [from, to]}, oldest first. */
-	@Query(value = "{ 'date': { $gte: ?0, $lte: ?1 } }", sort = "{ 'date': 1 }")
-	List<GridImport> findByDateInRange(LocalDate from, LocalDate to);
+	/** Imports for one inverter whose date falls in {@code [from, to]}, oldest first. */
+	@Query(value = "{ 'inverterSerial': ?0, 'date': { $gte: ?1, $lte: ?2 } }", sort = "{ 'date': 1 }")
+	List<GridImport> findByInverterSerialAndDateInRange(String inverterSerial, LocalDate from, LocalDate to);
+
+	List<GridImport> findByAppliedTariffIsNull();
 
 }

@@ -1,5 +1,6 @@
 package com.example.givenergy.battery;
 
+import com.example.givenergy.InverterDirectory;
 import com.example.givenergy.client.GivEnergyAuthenticationException;
 import org.junit.jupiter.api.Test;
 
@@ -30,9 +31,12 @@ class BatteryControllerTests {
 	@MockitoBean
 	private CandleService candleService;
 
+	@MockitoBean
+	private InverterDirectory inverters;
+
 	@Test
 	void rejectedTokenReturnsBadGatewayWithExplanation() throws Exception {
-		given(batteryService.currentStatus())
+		given(batteryService.currentStatus(null))
 				.willThrow(new GivEnergyAuthenticationException(HttpStatus.UNAUTHORIZED));
 
 		mvc.perform(get("/api/battery"))

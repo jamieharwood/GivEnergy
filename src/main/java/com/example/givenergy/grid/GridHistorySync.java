@@ -12,7 +12,9 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.example.givenergy.AppliedTariff;
 import com.example.givenergy.GivEnergyProperties;
+import com.example.givenergy.InverterDirectory;
 import com.example.givenergy.TariffProperties;
 import com.example.givenergy.client.CommunicationDevice;
 import com.example.givenergy.client.EnergyFlowPeriod;
@@ -25,22 +27,23 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 /**
- * Keeps {@code gridExports} and {@code gridImports} up to date with one document per inverter per day, from the
- * inverter's commissioning date through yesterday. Both come from the same half-hourly energy-flows calls, summed
- * into local days; import is also split into the tariff's off-peak and peak windows. Each run re-checks the last few
- * stored days (the cloud can still be filling them in) and fetches everything after; only new or changed days are
- * written.
+ * Keeps daily grid import, grid export and the seven-way energy balance up to date, from the inverter's commissioning
+ * date through yesterday. All three come from the same half-hourly energy-flows calls. Import is split into the
+ * tariff's off-peak and peak windows. Each run re-checks the last few stored days (the cloud can still be filling
+ * them in) and fetches everything after; only new or changed days are written. Days keep the prices in force when
+ * they were first stored. The most recent {@link #HALF_HOUR_DAYS} days, including today, are also kept as
+ * half-hour buckets.
  */
 @Component
 public class GridHistorySync {
 
 	private static final Logger log = LoggerFactory.getLogger(GridHistorySync.class);
 
-	private static final List<Integer> FLOW_TYPES = List.of(EnergyFlowType.SOLAR_TO_GRID,
-			EnergyFlowType.BATTERY_TO_GRID, EnergyFlowType.GRID_TO_HOME, EnergyFlowType.GRID_TO_BATTERY);
+	private static final List<Integer> FLOW_TYPES = List.of(EnergyFlowType.SOLAR_TO_HOME,
+			EnergyFlowType.SOLAR_TO_BATTERY, EnergyFlowType.SOLAR_TO_GRID, EnergyFlowType.GRID_TO_HOME,
+			EnergyFlowType.GRID_TO_BATTERY, EnergyFlowType.BATTERY_TO_HOME, EnergyFlowType.BATTERY_TO_GRID);
 
 	/**
 	 * Days per API call. Each padded request covers CHUNK_DAYS + 2 days of 48 half-hours (50 on the autumn clock
@@ -51,13 +54,20 @@ public class GridHistorySync {
 	/** How many already-stored days to fetch again in case they were incomplete when first stored. */
 	static final int RECHECK_DAYS = 2;
 
+	/** Half-hour buckets kept, including today. Older ones are deleted each sync. */
+	static final int HALF_HOUR_DAYS = 7;
+
 	private final GivEnergyClient client;
 
 	private final GridExportRepository exports;
 
 	private final GridImportRepository imports;
 
-	private final GivEnergyProperties properties;
+	private final EnergyBalanceRepository balances;
+
+	private final HalfHourFlowRepository halfHours;
+
+	private final InverterDirectory inverters;
 
 	private final TariffProperties tariff;
 
@@ -68,12 +78,15 @@ public class GridHistorySync {
 	private final boolean syncOnStartup;
 
 	GridHistorySync(GivEnergyClient client, GridExportRepository exports, GridImportRepository imports,
+			EnergyBalanceRepository balances, HalfHourFlowRepository halfHours, InverterDirectory inverters,
 			GivEnergyProperties properties, TariffProperties tariff, Clock clock,
 			@Value("${givenergy.grid-history.sync-on-startup:true}") boolean syncOnStartup) {
 		this.client = client;
 		this.exports = exports;
 		this.imports = imports;
-		this.properties = properties;
+		this.balances = balances;
+		this.halfHours = halfHours;
+		this.inverters = inverters;
 		this.tariff = tariff;
 		this.zone = properties.timezone();
 		this.clock = clock;
@@ -103,11 +116,14 @@ public class GridHistorySync {
 		}
 	}
 
-	/** @return the number of documents written (new or changed) across both collections */
+	/**
+	 * @return the number of daily documents written (new or changed) across exports, imports and energy balances
+	 */
 	public synchronized int sync() {
 		LocalDate today = LocalDate.now(clock.withZone(zone));
+		inverters.refresh();
 		int written = 0;
-		for (CommunicationDevice.Inverter inverter : inverters()) {
+		for (CommunicationDevice.Inverter inverter : inverters.list()) {
 			// Start from whichever collection is further behind. An empty one means a full back-fill, as do imports
 			// stored before the off-peak/peak split existed (they need re-fetching from half-hourly data).
 			Optional<LocalDate> latestExport = exports.findTopByInverterSerialOrderByDateDesc(inverter.serial())
@@ -115,23 +131,31 @@ public class GridHistorySync {
 			Optional<LocalDate> latestImport = imports.findTopByInverterSerialOrderByDateDesc(inverter.serial())
 					.filter(GridImport::hasRateSplit)
 					.map(GridImport::date);
-			LocalDate from = latestExport.isEmpty() || latestImport.isEmpty() ? firstDay(inverter, today)
-					: min(latestExport.get(), latestImport.get()).minusDays(RECHECK_DAYS - 1);
+			Optional<LocalDate> latestBalance = balances.findTopByInverterSerialOrderByDateDesc(inverter.serial())
+					.map(EnergyBalance::date);
+			LocalDate from = latestExport.isEmpty() || latestImport.isEmpty() || latestBalance.isEmpty()
+					? firstDay(inverter, today)
+					: min(min(latestExport.get(), latestImport.get()), latestBalance.get()).minusDays(RECHECK_DAYS - 1);
 			written += sync(inverter.serial(), from, today);
+			refreshHalfHours(inverter.serial(), today);
 		}
+		written += stampMissing();
 		return written;
 	}
 
 	/**
 	 * Re-fetches every day from {@code from} through yesterday, e.g. after changing the tariff's off-peak window.
-	 * @return the number of documents written (new or changed) across both collections
+	 * Stored prices are kept. @return the number of daily documents written
 	 */
 	public synchronized int syncFrom(LocalDate from) {
 		LocalDate today = LocalDate.now(clock.withZone(zone));
+		inverters.refresh();
 		int written = 0;
-		for (CommunicationDevice.Inverter inverter : inverters()) {
+		for (CommunicationDevice.Inverter inverter : inverters.list()) {
 			written += sync(inverter.serial(), from, today);
+			refreshHalfHours(inverter.serial(), today);
 		}
+		written += stampMissing();
 		return written;
 	}
 
@@ -140,6 +164,7 @@ public class GridHistorySync {
 		int fetched = 0;
 		int exportsWritten = 0;
 		int importsWritten = 0;
+		int balancesWritten = 0;
 		Instant now = Instant.now(clock);
 		for (LocalDate chunk = from; chunk.isBefore(toExclusive); chunk = chunk.plusDays(CHUNK_DAYS)) {
 			// Saved per chunk, so an interrupted back-fill resumes from the last stored day on the next run.
@@ -149,10 +174,26 @@ public class GridHistorySync {
 					.map(day -> toExport(serial, day.getKey(), day.getValue(), now)).toList(), exports);
 			importsWritten += saveChanged(days.entrySet().stream()
 					.map(day -> toImport(serial, day.getKey(), day.getValue(), now)).toList(), imports);
+			balancesWritten += saveBalances(days.entrySet().stream()
+					.map(day -> EnergyBalance.of(serial, day.getKey(), day.getValue(), now)).toList());
 		}
-		log.info("Grid history sync for {} {}..{}: {} days fetched, {} export and {} import days new or changed",
-				serial, from, toExclusive.minusDays(1), fetched, exportsWritten, importsWritten);
-		return exportsWritten + importsWritten;
+		log.info("Grid history sync for {} {}..{}: {} days fetched, {} export, {} import and {} balance days new or changed",
+				serial, from, toExclusive.minusDays(1), fetched, exportsWritten, importsWritten, balancesWritten);
+		return exportsWritten + importsWritten + balancesWritten;
+	}
+
+	private void refreshHalfHours(String serial, LocalDate today) {
+		LocalDate from = today.minusDays(HALF_HOUR_DAYS - 1);
+		LocalDate toExclusive = today.plusDays(1);
+		Instant now = Instant.now(clock);
+		List<HalfHourFlow> buckets = client.halfHourlyEnergyFlows(serial, from.minusDays(1), toExclusive.plusDays(1), FLOW_TYPES)
+				.stream()
+				.filter(period -> !period.date().isBefore(from) && period.date().isBefore(toExclusive))
+				.map(period -> HalfHourFlow.of(serial, period, tariff.isOffPeak(period.start().toLocalTime()), now))
+				.toList();
+		halfHours.deleteByInverterSerialAndStartBefore(serial, from.atStartOfDay());
+		halfHours.saveAll(buckets);
+		log.info("Half-hour flows for {}: {} buckets from {} kept", serial, buckets.size(), from);
 	}
 
 	/**
@@ -184,7 +225,7 @@ public class GridHistorySync {
 		return halfHours.stream().mapToDouble(p -> p.kwh(type)).sum();
 	}
 
-	private static <T extends GridDay> int saveChanged(List<T> days, MongoRepository<T, String> repository) {
+	private <T extends GridDay> int saveChanged(List<T> days, MongoRepository<T, String> repository) {
 		if (days.isEmpty()) {
 			return 0;
 		}
@@ -194,21 +235,68 @@ public class GridHistorySync {
 		List<T> changed = new ArrayList<>();
 		for (T day : days) {
 			T stored = existing.get(day.id());
+			T stamped = stamp(day, stored);
+			boolean missingPrice = stored != null && stored.appliedTariff() == null;
+			if (stored == null || !stored.sameValuesAs(stamped) || missingPrice) {
+				changed.add(stamped);
+			}
+		}
+		if (!changed.isEmpty()) {
+			repository.saveAll(changed);
+		}
+		return changed.size();
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T extends GridDay> T stamp(T day, T stored) {
+		AppliedTariff keep = stored != null && stored.appliedTariff() != null
+				? stored.appliedTariff() : AppliedTariff.from(tariff);
+		return (T) day.withAppliedTariff(keep);
+	}
+
+	private int saveBalances(List<EnergyBalance> days) {
+		if (days.isEmpty()) {
+			return 0;
+		}
+		Map<String, EnergyBalance> existing = balances.findAllById(days.stream().map(EnergyBalance::id).toList())
+				.stream()
+				.collect(Collectors.toMap(EnergyBalance::id, Function.identity()));
+		List<EnergyBalance> changed = new ArrayList<>();
+		for (EnergyBalance day : days) {
+			EnergyBalance stored = existing.get(day.id());
 			if (stored == null || !stored.sameValuesAs(day)) {
 				changed.add(day);
 			}
 		}
-		repository.saveAll(changed);
+		if (!changed.isEmpty()) {
+			balances.saveAll(changed);
+		}
 		return changed.size();
 	}
 
-	private List<CommunicationDevice.Inverter> inverters() {
-		String configured = properties.inverterSerial();
-		return client.communicationDevices().stream()
-				.map(CommunicationDevice::inverter)
-				.filter(inv -> inv != null && StringUtils.hasText(inv.serial()))
-				.filter(inv -> !StringUtils.hasText(configured) || configured.equals(inv.serial()))
-				.toList();
+	/** Freezes the current prices onto days stored before prices were recorded. */
+	private int stampMissing() {
+		int written = stampMissing(exports.findByAppliedTariffIsNull(), exports);
+		written += stampMissing(imports.findByAppliedTariffIsNull(), imports);
+		if (written > 0) {
+			log.info("Stamped current tariff onto {} previously unpriced days", written);
+		}
+		return written;
+	}
+
+	private <T extends GridDay> int stampMissing(List<T> missing, MongoRepository<T, String> repository) {
+		if (missing.isEmpty()) {
+			return 0;
+		}
+		AppliedTariff current = AppliedTariff.from(tariff);
+		List<T> stamped = new ArrayList<>();
+		for (T day : missing) {
+			@SuppressWarnings("unchecked")
+			T copy = (T) day.withAppliedTariff(current);
+			stamped.add(copy);
+		}
+		repository.saveAll(stamped);
+		return stamped.size();
 	}
 
 	private LocalDate firstDay(CommunicationDevice.Inverter inverter, LocalDate today) {

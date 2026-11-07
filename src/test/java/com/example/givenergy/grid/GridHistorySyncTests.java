@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.example.givenergy.AppliedTariff;
 import com.example.givenergy.GivEnergyProperties;
+import com.example.givenergy.InverterDirectory;
 import com.example.givenergy.TariffProperties;
 import com.example.givenergy.client.CommunicationDevice;
 import com.example.givenergy.client.EnergyFlowPeriod;
@@ -30,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -41,7 +44,7 @@ class GridHistorySyncTests {
 	private static final Instant NOW = Instant.parse("2026-10-31T00:30:00Z");
 
 	static final TariffProperties TARIFF = new TariffProperties(16.5, 36.48, 6.6, LocalTime.of(23, 30),
-			LocalTime.of(5, 30));
+			LocalTime.of(5, 30), 0.0);
 
 	private final GivEnergyClient client = mock(GivEnergyClient.class);
 
@@ -49,9 +52,15 @@ class GridHistorySyncTests {
 
 	private final GridImportRepository imports = mock(GridImportRepository.class);
 
-	private final GridHistorySync sync = new GridHistorySync(client, exports, imports,
-			new GivEnergyProperties(URI.create("https://api.test/v1"), "token", null, Duration.ZERO, LONDON), TARIFF,
-			Clock.fixed(NOW, LONDON), false);
+	private final EnergyBalanceRepository balances = mock(EnergyBalanceRepository.class);
+
+	private final HalfHourFlowRepository halfHours = mock(HalfHourFlowRepository.class);
+
+	private final GivEnergyProperties properties = new GivEnergyProperties(URI.create("https://api.test/v1"), "token",
+			null, Duration.ZERO, LONDON);
+
+	private final GridHistorySync sync = new GridHistorySync(client, exports, imports, balances, halfHours,
+			new InverterDirectory(client, properties), properties, TARIFF, Clock.fixed(NOW, LONDON), false);
 
 	@BeforeEach
 	void inverter() {
@@ -59,6 +68,8 @@ class GridHistorySyncTests {
 				new CommunicationDevice.Inverter("CE1", "GIV-AC3.0", OffsetDateTime.parse("2026-10-20T00:00:00Z")))));
 		given(exports.findAllById(anyIterable())).willReturn(List.of());
 		given(imports.findAllById(anyIterable())).willReturn(List.of());
+		given(balances.findAllById(anyIterable())).willReturn(List.of());
+		lenient().when(client.halfHourlyEnergyFlows(any(), any(), any(), any())).thenReturn(List.of());
 	}
 
 	@Test
@@ -82,14 +93,18 @@ class GridHistorySyncTests {
 
 		assertThat(saved(exports)).extracting(GridExport::id, GridExport::solarToGridKwh, GridExport::exportKwh)
 				.containsExactly(tuple("CE1_2026-10-30", 5.03, 5.19));
+		assertThat(saved(exports).getFirst().appliedTariff()).isEqualTo(AppliedTariff.from(TARIFF));
 		assertThat(saved(imports)).extracting(GridImport::id, GridImport::importKwh, GridImport::offPeakImportKwh)
 				.containsExactly(tuple("CE1_2026-10-30", 4.9, 3.9));
+		assertThat(saved(balances)).extracting(EnergyBalance::solarToGridKwh, EnergyBalance::gridToHomeKwh)
+				.containsExactly(tuple(5.03, 2.7));
 	}
 
 	@Test
 	void laterRunsRecheckRecentDaysAndOnlyWriteChanges() {
 		given(exports.findTopByInverterSerialOrderByDateDesc("CE1")).willReturn(Optional.of(export("2026-10-29", 0.3)));
 		given(imports.findTopByInverterSerialOrderByDateDesc("CE1")).willReturn(Optional.of(importOf("2026-10-29", 30.8, 10)));
+		given(balances.findTopByInverterSerialOrderByDateDesc("CE1")).willReturn(Optional.of(balance("2026-10-29")));
 		// Re-checks the 28th and 29th, fetches the new 30th.
 		given(client.halfHourlyEnergyFlows(eq("CE1"), eq(LocalDate.of(2026, 10, 27)), eq(LocalDate.of(2026, 11, 1)), any()))
 				.willReturn(List.of(flow("2026-10-28 12:00", 15.5, 0, 24.8, 0), flow("2026-10-29 01:00", 0, 0, 10, 0),
@@ -102,9 +117,11 @@ class GridHistorySyncTests {
 
 		int written = sync.sync();
 
-		assertThat(written).isEqualTo(4);
+		assertThat(written).isEqualTo(7);
 		assertThat(saved(exports)).extracting(GridExport::id).containsExactly("CE1_2026-10-28", "CE1_2026-10-30");
 		assertThat(saved(imports)).extracting(GridImport::id).containsExactly("CE1_2026-10-28", "CE1_2026-10-30");
+		assertThat(saved(balances)).extracting(EnergyBalance::date)
+				.containsExactly(LocalDate.of(2026, 10, 28), LocalDate.of(2026, 10, 29), LocalDate.of(2026, 10, 30));
 	}
 
 	@Test
@@ -122,7 +139,8 @@ class GridHistorySyncTests {
 	void importsStoredWithoutTheRateSplitTriggerAFullBackfill() {
 		given(exports.findTopByInverterSerialOrderByDateDesc("CE1")).willReturn(Optional.of(export("2026-10-29", 0.3)));
 		given(imports.findTopByInverterSerialOrderByDateDesc("CE1")).willReturn(Optional.of(
-				new GridImport("CE1_2026-10-29", "CE1", LocalDate.of(2026, 10, 29), 30.8, 0, 30.8, null, Instant.EPOCH)));
+				new GridImport("CE1_2026-10-29", "CE1", LocalDate.of(2026, 10, 29), 30.8, 0, 30.8, null, Instant.EPOCH,
+						null)));
 		given(client.halfHourlyEnergyFlows(eq("CE1"), any(), any(), any())).willReturn(List.of());
 
 		sync.sync();
@@ -159,11 +177,17 @@ class GridHistorySyncTests {
 	}
 
 	private static GridExport export(String date, double solar) {
-		return GridExport.of("CE1", LocalDate.parse(date), solar, 0, Instant.EPOCH);
+		return GridExport.of("CE1", LocalDate.parse(date), solar, 0, Instant.EPOCH)
+				.withAppliedTariff(AppliedTariff.from(TARIFF));
 	}
 
 	private static GridImport importOf(String date, double home, double offPeak) {
-		return GridImport.of("CE1", LocalDate.parse(date), home, 0, offPeak, Instant.EPOCH);
+		return GridImport.of("CE1", LocalDate.parse(date), home, 0, offPeak, Instant.EPOCH)
+				.withAppliedTariff(AppliedTariff.from(TARIFF));
+	}
+
+	private static EnergyBalance balance(String date) {
+		return new EnergyBalance("CE1_" + date, "CE1", LocalDate.parse(date), 0, 0, 0, 0, 0, 0, 0, Instant.EPOCH);
 	}
 
 }

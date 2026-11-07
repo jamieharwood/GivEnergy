@@ -41,7 +41,28 @@ class BatteryServiceTests {
 	}
 
 	private static MeterData meter() {
-		return new MeterData(OffsetDateTime.now(), new MeterData.Totals(new MeterData.Battery(3.4, 1.1)), null);
+		return new MeterData(OffsetDateTime.now(),
+				new MeterData.Totals(null, null, new MeterData.Battery(3.4, 1.1), null), null);
+	}
+
+	@Test
+	void livePowerAndMeterCountersAreKept() {
+		OffsetDateTime time = OffsetDateTime.parse("2026-10-31T12:00:00Z");
+		SystemData system = new SystemData(time, "Normal", new SystemData.Battery(76, -850, 21.5),
+				new SystemData.Solar(1200), new SystemData.Grid(-50), 400);
+		MeterData meter = new MeterData(time,
+				new MeterData.Totals(5.1, new MeterData.Grid(1.2, 0.3), new MeterData.Battery(3.4, 1.1), 4.0),
+				new MeterData.Totals(900.0, new MeterData.Grid(1000.0, 200.0), new MeterData.Battery(700.0, 650.0),
+						1500.0));
+
+		BatteryStatus status = BatteryService.toStatus("CE1234", system, meter);
+
+		assertThat(status.inverterStatus()).isEqualTo("Normal");
+		assertThat(status.power()).isEqualTo(new BatteryStatus.PowerNow(1200, 0, 50, 400));
+		assertThat(status.today().solarKwh()).isEqualTo(5.1);
+		assertThat(status.today().gridImportKwh()).isEqualTo(1.2);
+		assertThat(status.lifetime().gridExportKwh()).isEqualTo(200.0);
+		assertThat(status.lifetime().consumptionKwh()).isEqualTo(1500.0);
 	}
 
 }

@@ -2,12 +2,18 @@ package com.example.givenergy.grid;
 
 import java.util.List;
 
-/** Direction of grid energy, and the parts each direction is split into. */
+/** A way of splitting a day's energy into named parts for one chart. */
 public enum GridFlow {
 
 	EXPORT(List.of("solarToGrid", "batteryToGrid")),
 
-	IMPORT(List.of("gridToHome", "gridToBattery"));
+	IMPORT(List.of("gridToHome", "gridToBattery")),
+
+	/** Solar generation: where each kWh of PV went. */
+	SOLAR(List.of("solarToHome", "solarToBattery", "solarToGrid")),
+
+	/** House consumption: where each kWh used in the home came from. */
+	HOUSE(List.of("solarToHome", "batteryToHome", "gridToHome"));
 
 	private final List<String> parts;
 

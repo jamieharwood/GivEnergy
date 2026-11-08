@@ -107,7 +107,7 @@ Alternatively, set the `GIVENERGY_API_TOKEN` and `MONGODB_URI` environment varia
 
 ### 4. Open the dashboard
 
-Go to <http://localhost:8081/>.
+Go to <http://localhost:8082/>.
 
 The first time the app starts, and the first start after upgrading to the solar and house history, it back-fills every energy flow from the installation date. That takes about 10 seconds for 4 years of data, and it stores the current prices on each day. Run that sync before changing a price if you want the old days to keep the old rate. Battery charts fill up as readings arrive, and daily battery candles appear after the first midnight summary. Today's daily bar is not drawn until the next night; today's kWh is in the header, and the half-hour chart includes today.
 
@@ -122,7 +122,7 @@ GIVENERGY_API_TOKEN=<your token>
 # Optional
 #GIVENERGY_INVERTER_SERIAL=CE1234G567
 #MONGODB_URI=mongodb://localhost:27017/givenergy
-#GIVENERGY_PORT=8081
+#GIVENERGY_PORT=8082
 ```
 
 Then build and start it:
@@ -133,7 +133,7 @@ docker compose logs -f           # follow the logs
 docker compose down              # stop it
 ```
 
-The dashboard is on <http://localhost:8081/>, or the port set by `GIVENERGY_PORT`. The container restarts automatically unless you stop it. `config/application.properties` isn't used inside the container, so set everything through `.env` or `environment:` in `compose.yaml`. Any property can be set there as an environment variable, for example `GIVENERGY_POLL_INTERVAL=10m`. The MongoDB host must be reachable from the container: `localhost` there means the container itself, so use the host's name or address.
+The dashboard is on <http://localhost:8082/>, or the port set by `GIVENERGY_PORT`. The container restarts automatically unless you stop it. `config/application.properties` isn't used inside the container, so set everything through `.env` or `environment:` in `compose.yaml`. Any property can be set there as an environment variable, for example `GIVENERGY_POLL_INTERVAL=10m`. The MongoDB host must be reachable from the container: `localhost` there means the container itself, so use the host's name or address.
 
 Run only one copy of the app at a time (for example, stop it in IntelliJ first). Two copies don't create duplicate records, but they double the calls to the GivEnergy API.
 
@@ -156,7 +156,7 @@ These are set in `application.properties`, `config/application.properties` or on
 | `givenergy.tariff.standing-charge-pence` | | `0` | Supplier standing charge, pence per day, added to the net. `0` leaves existing totals unchanged |
 | `givenergy.alerts.low-soc-percent` | | `20` | Warn when the battery is still below this percent in the four hours after off-peak ends. `0` turns that warning off |
 | `spring.mongodb.uri` | `MONGODB_URI` | `mongodb://storenator.bluelarma.com:27017/givenergy` | MongoDB connection, including the database name |
-| `server.port` | | `8081` | Web server port |
+| `server.port` | | `8082` | Web server port |
 
 ## REST API
 
@@ -258,7 +258,7 @@ The dashboard is plain HTML, CSS and JavaScript with hand-drawn SVG charts. It d
 | `APPLICATION FAILED TO START … givenergy.apiToken … is required` | No token configured. Add it to `config/application.properties` or set `GIVENERGY_API_TOKEN`. A variable exported in a terminal doesn't reach apps started from IntelliJ; set it in the run configuration instead. |
 | `GivEnergy rejected the API token (HTTP 401)` | The token is wrong, revoked or expired. Test it with `curl -H "Authorization: Bearer <token>" https://api.givenergy.cloud/v1/communication-device`. |
 | `HTTP 403` / "lacks permission" | Create a token with the `api:inverter:read` permission. |
-| `Port 8081 was already in use` | Stop the other process, or set `server.port`. |
+| `Port 8082 was already in use` | Stop the other process, or set `server.port`. |
 | `release version 21 not supported` / no `javac` | The build is using a Java runtime rather than a JDK. Point `JAVA_HOME` (or IntelliJ's Project SDK) at a full JDK 21+. |
 | Battery Week/Year charts only show today | Daily candles come from midnight summaries, so they appear one day at a time. To build a missed day, run `POST /api/battery/summaries/{date}`. |
 

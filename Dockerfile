@@ -27,5 +27,5 @@ COPY --from=build /layers/snapshot-dependencies/ ./
 COPY --from=build /layers/application/ ./
 
 USER givenergy
-EXPOSE 8081
+EXPOSE 8082
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

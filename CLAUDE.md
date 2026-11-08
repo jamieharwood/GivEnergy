@@ -11,14 +11,14 @@ export JAVA_HOME=~/.jdks/ms-21.0.12
 ./gradlew build                                        # compile + all tests + boot jar (build/libs)
 ./gradlew test --tests BatteryServiceTests             # single test class
 ./gradlew test --tests 'GivEnergyClientTests.readsLatestSystemData'   # single method
-GIVENERGY_API_TOKEN=... ./gradlew bootRun              # run; then GET http://localhost:8081/api/battery
+GIVENERGY_API_TOKEN=... ./gradlew bootRun              # run; then GET http://localhost:8082/api/battery
 ```
 
 Tests need no token. `@SpringBootTest` classes must set `givenergy.poll-interval=0` and `givenergy.grid-history.sync-on-startup=false` (see `GivEnergyApplicationTests`), or the background jobs start calling the API and writing to Mongo.
 
 The default `spring.mongodb.uri` is the real database, and there is no separate dev profile, so a local `bootRun` writes to live data unless `MONGODB_URI` is set. Stop the Docker container first when running locally: two copies don't create duplicates, but they double the API calls.
 
-Docker: `docker compose up -d --build` builds the multi-stage `Dockerfile` (layered boot jar via `-Djarmode=tools extract --layers --launcher`, non-root JRE image) and runs it on port 8081 (`GIVENERGY_PORT` overrides the host port). The token comes from `GIVENERGY_API_TOKEN` in the git- and docker-ignored `.env`; `config/` isn't copied into the image. In the container, `localhost` in `MONGODB_URI` means the container itself.
+Docker: `docker compose up -d --build` builds the multi-stage `Dockerfile` (layered boot jar via `-Djarmode=tools extract --layers --launcher`, non-root JRE image) and runs it on port 8082 (`GIVENERGY_PORT` overrides the host port). The token comes from `GIVENERGY_API_TOKEN` in the git- and docker-ignored `.env`; `config/` isn't copied into the image. In the container, `localhost` in `MONGODB_URI` means the container itself.
 
 ## Architecture
 

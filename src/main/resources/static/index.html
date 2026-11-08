@@ -60,24 +60,44 @@
 	}
 
 	* { box-sizing: border-box; }
+	/* Reserve the scrollbar's space so short tabs (no scrollbar) don't re-centre the page sideways. */
+	html { scrollbar-gutter: stable; }
 	body {
 		margin: 0;
 		background: var(--page);
 		color: var(--text-primary);
 		font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
 	}
-	main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 48px; }
+	main { max-width: 1360px; margin: 0 auto; padding: 32px 16px 48px; }
 
 	header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 	h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
 	.subtitle { color: var(--text-secondary); margin: 0; }
-	.now { text-align: right; }
-	.live { display: flex; flex-wrap: wrap; gap: 14px 22px; justify-content: flex-end; }
-	.metric { min-width: 4.5rem; }
-	.metric-value { font-size: 18px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
-	.metric.soc .metric-value { font-size: 32px; }
-	.metric-label { color: var(--text-secondary); font-size: 12px; }
+	.layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; align-items: start; }
+	.content { min-width: 0; }
+	.side { position: sticky; top: 16px; padding: 18px 18px 14px; }
+	.side[hidden] { display: none; }
+	.side-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+	.side-time { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+	.soc { margin: 14px 0 6px; }
+	.soc-value { font-size: 34px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+	.soc-label { color: var(--text-secondary); font-size: 12px; }
+	.soc-bar { height: 6px; border-radius: 3px; background: var(--wash); margin-top: 8px; overflow: hidden; }
+	.soc-bar span { display: block; height: 100%; background: var(--rise); border-radius: 3px; }
+	.side h3 { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 16px 0 2px; }
+	.readings { margin: 0; }
+	.readings div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+	.readings div:last-child { border-bottom: 0; }
+	.readings dt { color: var(--text-secondary); }
+	.readings dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+	@media (max-width: 900px) {
+		.layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+		.side { position: static; order: -1; }
+		.readings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); column-gap: 24px; }
+		.readings div:last-child { border-bottom: 1px solid var(--grid); }
+	}
 	.inverter { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-secondary); font-size: 13px; }
+	.inverter[hidden] { display: none; }
 	.inverter select, .choice input, .choice select {
 		font: inherit; color: var(--text-primary); background: var(--surface);
 		border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px;
@@ -166,9 +186,6 @@
 
 	@media (max-width: 560px) {
 		main { padding-top: 20px; }
-		.now { text-align: left; }
-		.live { justify-content: flex-start; }
-		.metric.soc .metric-value { font-size: 28px; }
 		#chart { height: 280px; }
 		.card { padding: 16px 12px 8px; }
 	}
@@ -241,9 +258,11 @@
 			<p class="subtitle" id="subtitle">GivEnergy inverter</p>
 			<label class="inverter" id="inverter-label" hidden>Inverter <select id="inverter"></select></label>
 		</div>
-		<div class="now" id="now" hidden></div>
 	</header>
 	<div class="alerts" id="alerts" role="status" hidden></div>
+
+	<div class="layout">
+	<div class="content">
 
 	<div class="tabs" role="tablist" aria-label="Dashboard">
 		<button type="button" role="tab" id="tab-grid" aria-controls="panel-grid" data-tab="grid">Grid</button>
@@ -355,7 +374,24 @@
 		<p class="note" id="half-hour-note">The last two days, half-hourly, including today. Shaded bands are the off-peak window. Bars are import; the line is export.</p>
 	</section>
 	<p class="error" id="grid-error" hidden></p>
-	<p class="note">Energy sent to the grid (split into what came straight from solar and what the battery discharged) and energy bought from the grid (split into what went straight to the house and what charged the battery). Both charts share one scale so they can be compared. Each day keeps the prices from when it was first saved, so a tariff change leaves older months alone. The net adds one standing charge per day and subtracts export earnings. Daily bars run through yesterday; today is in the header and the half-hourly chart.</p>
+	<p class="note">Energy sent to the grid (split into what came straight from solar and what the battery discharged) and energy bought from the grid (split into what went straight to the house and what charged the battery). Both charts share one scale so they can be compared. Each day keeps the prices from when it was first saved, so a tariff change leaves older months alone. The net adds one standing charge per day and subtracts export earnings. Daily bars run through yesterday; today is in the side panel and the half-hourly chart.</p>
+	</div>
+	</div>
+
+	<aside class="card side" id="now" aria-labelledby="now-title" hidden>
+		<div class="side-head">
+			<h2 class="card-title" id="now-title">Right now</h2>
+			<span class="side-time" id="now-time"></span>
+		</div>
+		<div class="soc">
+			<div class="soc-value" id="now-soc"></div>
+			<div class="soc-label">Battery state of charge</div>
+			<div class="soc-bar" aria-hidden="true"><span id="now-soc-bar"></span></div>
+		</div>
+		<dl class="readings" id="now-power"></dl>
+		<h3>Today</h3>
+		<dl class="readings" id="now-today"></dl>
+	</aside>
 	</div>
 </main>
 
@@ -385,6 +421,23 @@
 	let saved = null;
 	try { saved = localStorage.getItem("tab"); } catch (e) { /* storage unavailable */ }
 	select(tabs.find(t => t.dataset.tab === saved) || tabs[0], false);
+})();
+</script>
+<script>
+(() => {
+	// Line the side panel's top up with the first card of the visible tab (below the tabs and filters).
+	const layout = document.querySelector(".layout");
+	const side = document.getElementById("now");
+	const wide = matchMedia("(min-width: 901px)");
+	function align() {
+		const card = wide.matches && document.querySelector('.content [role="tabpanel"]:not([hidden]) .card:not([hidden])');
+		side.style.marginTop = card ? `${Math.max(0, card.getBoundingClientRect().top - layout.getBoundingClientRect().top)}px` : "";
+	}
+	const later = () => requestAnimationFrame(align);
+	new ResizeObserver(later).observe(document.querySelector(".content"));
+	new MutationObserver(later).observe(document.querySelector(".content"), { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+	wide.addEventListener("change", later);
+	later();
 })();
 </script>
 <script>
@@ -511,17 +564,14 @@
 		}
 	}
 
-	function metric(label, value, soc) {
-		const node = document.createElement("div");
-		node.className = soc ? "metric soc" : "metric";
-		const v = document.createElement("div");
-		v.className = "metric-value";
-		v.textContent = value;
-		const l = document.createElement("div");
-		l.className = "metric-label";
-		l.textContent = label;
-		node.append(v, l);
-		return node;
+	function reading(label, value) {
+		const row = document.createElement("div");
+		const dt = document.createElement("dt");
+		dt.textContent = label;
+		const dd = document.createElement("dd");
+		dd.textContent = value;
+		row.append(dt, dd);
+		return row;
 	}
 	function watts(n) {
 		const abs = Math.abs(n);
@@ -539,18 +589,25 @@
 				: s.state === "DISCHARGING" ? `Discharging ${watts(s.dischargePowerWatts)}` : "Idle";
 			const today = s.today || {};
 			const box = document.getElementById("now");
-			box.replaceChildren(
-				metric("State of charge", `${s.stateOfChargePercent}%`, true),
-				metric("Battery", battery),
-				metric("Solar", watts(power.solarWatts || 0)),
-				metric("House", watts(power.consumptionWatts || 0)),
-				metric("Grid", grid),
-				metric("Battery temperature", s.temperatureCelsius == null ? "–" : `${s.temperatureCelsius}°C`),
-				metric("Inverter", s.inverterStatus || "–"),
-				metric("Solar today", `${(today.solarKwh || 0).toFixed(1)} kWh`),
-				metric("Import today", `${(today.gridImportKwh || 0).toFixed(1)} kWh`),
-				metric("Export today", `${(today.gridExportKwh || 0).toFixed(1)} kWh`),
-				metric("House today", `${(today.consumptionKwh || 0).toFixed(1)} kWh`),
+			const soc = Math.max(0, Math.min(100, s.stateOfChargePercent || 0));
+			document.getElementById("now-soc").textContent = `${s.stateOfChargePercent}%`;
+			document.getElementById("now-soc-bar").style.width = `${soc}%`;
+			document.getElementById("now-time").textContent = s.time
+				? new Date(s.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+			document.getElementById("now-power").replaceChildren(
+				reading("Battery", battery),
+				reading("Solar", watts(power.solarWatts || 0)),
+				reading("House", watts(power.consumptionWatts || 0)),
+				reading("Grid", grid),
+				reading("Battery temperature", s.temperatureCelsius == null ? "–" : `${s.temperatureCelsius}°C`),
+				reading("Inverter", s.inverterStatus || "–"),
+			);
+			const kwh = n => `${(n || 0).toFixed(1)} kWh`;
+			document.getElementById("now-today").replaceChildren(
+				reading("Solar", kwh(today.solarKwh)),
+				reading("House", kwh(today.consumptionKwh)),
+				reading("Import", kwh(today.gridImportKwh)),
+				reading("Export", kwh(today.gridExportKwh)),
 			);
 			document.getElementById("subtitle").textContent = `Inverter ${s.inverterSerial}`;
 			box.hidden = false;

@@ -109,7 +109,7 @@ Alternatively, set the `GIVENERGY_API_TOKEN` and `MONGODB_URI` environment varia
 
 Go to <http://localhost:8082/>.
 
-The first time the app starts, and the first start after upgrading to the solar and house history, it back-fills every energy flow from the installation date. That takes about 10 seconds for 4 years of data, and it stores the current prices on each day. Run that sync before changing a price if you want the old days to keep the old rate. Battery charts fill up as readings arrive, and daily battery candles appear after the first midnight summary. Today's daily bar is not drawn until the next night; today's kWh is in the header, and the half-hour chart includes today.
+The first time the app starts, and the first start after upgrading to the solar and house history, it back-fills every energy flow from the installation date. That takes about 10 seconds for 4 years of data, and it stores the current prices on each day. Run that sync before changing a price if you want the old days to keep the old rate. Battery charts fill up as readings arrive, and daily battery candles appear after the first midnight summary. Today's daily bar is not drawn until the next night; today's kWh is in the "Right now" side panel, and the half-hour chart includes today.
 
 ### Running in Docker
 
